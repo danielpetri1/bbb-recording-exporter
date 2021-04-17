@@ -1,10 +1,11 @@
 require 'nokogiri'
 require 'open-uri'
+require 'fileutils'
 
 def download(file)
     # Base URL of the recording
     # Format: "https://hostname/presentation/meetingID/"
-    base_url = "YOUR_BASE_URL"
+    base_url = "YOUR-BASE-URL"
 
     path = base_url + file
     puts "Downloading " + path
@@ -14,8 +15,8 @@ def download(file)
     end
 end
 
-# Download desired data, e.g. 'metadata.xml', 'panzooms.xml', 'cursor.xml', 'deskshare.xml', 'presentation_text.json', 'captions.json', 'slides_new.xml', 'video/webcams.mp4', 'deskshare/deskshare.mp4'
-for get in ['shapes.svg', 'video/webcams.mp4'] do
+# Download desired data, e.g. 'metadata.xml', 'panzooms.xml', 'cursor.xml', 'presentation_text.json', 'captions.json', 'slides_new.xml', 'video/webcams.mp4', 'deskshare/deskshare.mp4'
+for get in ['shapes.svg', 'video/webcams.mp4', 'deskshare/deskshare.mp4'] do
     download(get)
 end
 
@@ -28,10 +29,16 @@ File.open("whiteboard-timestamps-svg", "w") {}
 # Gets each slide in the presentation
 slides = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg', 'xlink' => 'http://www.w3.org/1999/xlink')
 
-# Downloads slides
+# Downloads each slide
 # On the server you don't have to do this since the slides are saved as individual PNG images in the presentation folder
-# Client side it is currently still required to create the folders manually (path can be seen in the error message)
 slides.each do |img|
+    path = File.dirname(img.attr('xlink:href'))
+    
+    # Creates folder structure if it's not present
+    unless File.directory?(path) 
+        FileUtils.mkdir_p(path)
+    end
+    
     download(img.attr('xlink:href'))
 end
 
@@ -108,8 +115,11 @@ slides.each do |slide|
             frameNumber += 1
         end
 
-        # Export slide for later processing as annotated PDF file in Cairo
-        # ...
+        # Export slide for later processing as annotated PDF file in Cairo by copying last completed PNG/SVG frame
+        
+        open('slides/slide' + slideNumber.to_s + '.png', 'wb') do |file|
+            file << open('frames/png/frame' + (frameNumber - 1).to_s + '.png').read
+        end
         
     else
         # Since the slide has no annotations drawn over it, we only need to render the frame itself
@@ -124,11 +134,19 @@ slides.each do |slide|
         end
 
         time += duration
+
+        # Export slide for later processing as annotated PDF file in Cairo by copying last completed PNG/SVG frame
+
+        open('slides/slide' + slideNumber.to_s + '.png', 'wb') do |file|
+            file << open(image).read
+        end
     end
+
+    slideNumber += 1
 end
 
 # Last file needs to be specified twice due to a problem on FFmpeg's side, without duration (according to the documentation, in practice it seems to be fine...)
 # ... 
 
 # Recreates the presentation with FFmpeg's Concat Demuxer
-system("ffmpeg -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:a -pix_fmt yuv420p -vsync vfr -vf \"scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:(ow-iw)/2:(oh-ih)/2\" presentation.mp4")
+system("ffmpeg -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:a -pix_fmt yuv420p -vsync vfr -vf \"scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:(ow-iw)/2:(oh-ih)/2\" -y presentation.mp4")

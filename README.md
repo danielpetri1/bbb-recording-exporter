@@ -7,8 +7,8 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 
 ## What's supported?
 
-✅  Exporting BigBlueButton presentations as a single video file, including audio, slides and whiteboard annotations
-✅  Saving annotated slides as PNG so they can be merged into a new PDF
+✅  Exporting BigBlueButton presentations as a single video file, including audio, slides and whiteboard annotations<br />
+✅  Saving annotated slides as PNG so they can be merged into a new PDF<br />
 
 ## What's coming?
 

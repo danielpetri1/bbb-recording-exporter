@@ -12,10 +12,10 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 
 ## What's coming?
 
-🔜  Option to add the session's webcams  
-🔜  Option to add the session's screen sharing video (deskshare)   
-🔜  Cursor support  
-🔜  Chat, polls  
+🔜  Option to add the session's webcams <br />
+🔜  Option to add the session's screen sharing video (deskshare) <br />
+🔜  Cursor support <br />
+🔜  Chat, polls <br />
 
 ## How it works
 

@@ -131,4 +131,4 @@ end
 # ... 
 
 # Recreates the presentation with FFmpeg's Concat Demuxer
-system("ffmpeg -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -map 0:v -map 1:a -pix_fmt yuv420p -vsync vfr presentation.webm")
+system("ffmpeg -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:a -pix_fmt yuv420p -vsync vfr presentation.mp4")

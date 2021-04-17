@@ -41,7 +41,7 @@ hasCanvas = whiteboard.xpath('//@image').to_a.map(&:to_s)
 
 # Current frame and slide in the animation
 frameNumber = 0
-#slideNumber = 0
+slideNumber = 0
 time = 0
 
 # For each slide, we write down the time it appears in the animation and create an SVG file displaying it
@@ -131,4 +131,4 @@ end
 # ... 
 
 # Recreates the presentation with FFmpeg's Concat Demuxer
-system("ffmpeg -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:a -pix_fmt yuv420p -vsync vfr presentation.mp4")
+system("ffmpeg -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:a -pix_fmt yuv420p -vsync vfr -vf \"scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:(ow-iw)/2:(oh-ih)/2\" presentation.mp4")

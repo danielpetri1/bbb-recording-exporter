@@ -1,6 +1,8 @@
 
 # BigBlueButton Downloader
 
+⚠️ **Still very buggy!**⚠️<br />
+
 A client- and (future) server side script to enable users to download a BigBlueButton recording as a single video file.
 
 This is still a work in progress that downloads Big Blue Button's `shapes.svg` file to locally recreate the recording played in the browser as a `webm` or `.mp4` file.

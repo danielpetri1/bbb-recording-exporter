@@ -5,7 +5,7 @@ require 'fileutils'
 def download(file)
     # Base URL of the recording
     # Format: "https://hostname/presentation/meetingID/"
-    base_url = "https://balancer.bbb.rbg.tum.de/presentation/32660e42f95b3ba7a92c968cdc9e0c37272cf463-1613978884363/"
+    base_url = "YOUR-BASE-URL"
 
     path = base_url + file
     puts "Downloading " + path

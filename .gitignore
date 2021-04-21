@@ -1,0 +1,12 @@
+*
+*/
+!.gitignore
+!README.md
+!presentation-render.rb
+!LICENSE
+!video/
+!deskshare/
+!slides/
+!presentation/
+!frames/
+!deskshare/

@@ -5,7 +5,7 @@ require 'fileutils'
 def download(file)
     # Base URL of the recording
     # Format: "https://hostname/presentation/meetingID/"
-    base_url = "YOUR-BASE-URL"
+    base_url = ""
 
     path = base_url + file
     puts "Downloading " + path
@@ -59,7 +59,7 @@ slides.each do |slide|
         frames = @doc.xpath("//*[@image=\"" + slide.attr('id').to_s + "\"]/*")
 
         frames.each do |frame|
-            # A frame is composed of itself and the data that came before it
+            # A frame is consists of the current drawn asset and the ones that came before it
             frameSiblings = frame.xpath('./self::*|preceding-sibling::*')
             
             # The background image needs to be made visible
@@ -80,9 +80,6 @@ slides.each do |slide|
 
             # Builds SVG frame
             builder = Nokogiri::XML::Builder.new do |xml|
-                # Adds Document Type Definition (may not be needed)
-                # xml.doc.create_internal_subset('svg', "-//W3C//DTD SVG 1.1//EN", "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd")
-                
                 xml.svg(width: width, height: height, version: "1.1", 'xmlns' => "http://www.w3.org/2000/svg", 'xmlns:xlink' => "http://www.w3.org/1999/xlink") {
                     # Adds backgrounds image
                     xml << slide.to_s
@@ -97,17 +94,14 @@ slides.each do |slide|
                 file.write(builder.to_xml)
             end
 
-            # Export image as PNG (requires librsvg; may not be needed since FFmpeg has support for SVG files when compiled with -enable-librsvg)
-            command = "rsvg-convert --format=png --output=frames/png/frame" + frameNumber.to_s + ".png frame" + frameNumber.to_s + ".svg"
+            # Export image as PNG
+            command = "rsvg-convert --format=png --output=frames/frame" + frameNumber.to_s + ".png frame" + frameNumber.to_s + ".svg"
             system(command)
-
-            # Delete created SVG file to save space (right now we only care about PNG)
-            system("rm frame" + frameNumber.to_s + ".svg")
 
             duration = (frame.attr('timestamp').to_f - time).round(1)
 
             File.open('whiteboard-timestamps-svg', 'a') do |file|
-                file.puts("file frames/png/frame" + frameNumber.to_s + ".png")
+                file.puts("file frames/frame" + frameNumber.to_s + ".png")
                 file.puts "duration " + duration.to_s
             end
 
@@ -116,9 +110,8 @@ slides.each do |slide|
         end
 
         # Export slide for later processing as annotated PDF file in Cairo by copying last completed PNG/SVG frame
-        
         open('slides/slide' + slideNumber.to_s + '.png', 'wb') do |file|
-            file << open('frames/png/frame' + (frameNumber - 1).to_s + '.png').read
+            file << open('frames/frame' + (frameNumber - 1).to_s + '.png').read
         end
         
     else
@@ -135,8 +128,7 @@ slides.each do |slide|
 
         time += duration
 
-        # Export slide for later processing as annotated PDF file in Cairo by copying last completed PNG/SVG frame
-
+        # Export slide for later processing as annotated PDF file in Cairo by copying last completed PNG
         open('slides/slide' + slideNumber.to_s + '.png', 'wb') do |file|
             file << open(image).read
         end
@@ -148,5 +140,11 @@ end
 # Last file needs to be specified twice due to a problem on FFmpeg's side, without duration (according to the documentation, in practice it seems to be fine...)
 # ... 
 
-# Recreates the presentation with FFmpeg's Concat Demuxer
-system("ffmpeg -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:a -pix_fmt yuv420p -vsync vfr -vf \"scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:(ow-iw)/2:(oh-ih)/2\" -y presentation.mp4")
+# Recreates the presentation with FFmpeg's Concat Demuxer (just slides + annotations + audio, fast due to variable frame rate)
+#system("ffmpeg -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:a -pix_fmt yuv420p -vsync vfr -vf \"scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:(ow-iw)/2:(oh-ih)/2\" -y presentation.mp4")
+
+# Remove created SVG frames
+system("rm frame*.svg")
+
+# Slides + Whiteboard + Screenshare
+system("ffmpeg -i deskshare/deskshare.mp4 -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:v -map 2:a -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:(ow-iw)/2:(oh-ih)/2[a];[0][a]overlay=x=(main_w-overlay_w)/2:y=(main_h-overlay_h)/2' presentation-deskshare.mp4")

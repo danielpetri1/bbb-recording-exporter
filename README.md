@@ -1,21 +1,21 @@
 
 # BigBlueButton Downloader
 
-A client- and (future) server side script to enable users to download a BigBlueButton recording as a video.
+A client- and (future) server side script to enable users to download a BigBlueButton recording as a single video file.
 
 This is still a work in progress that downloads Big Blue Button's `shapes.svg` file to locally recreate the recording played in the browser as a `webm` or `.mp4` file.
 
 ## What's supported?
 
-✅  Quick export of BigBlueButton presentations as a single video file, containing audio, slides and whiteboard annotations<br />
-✅  Rendering BigBlueButton sessions into a video that includes the whiteboard, audio and screen sharing video (deskshare)<br />
+✅  Quick export of BigBlueButton presentations containing audio, slides and whiteboard annotations<br />
+✅  Option to render the webcams and screen sharings (deskshare) in addition to the presentation<br />
 ✅  Saving annotated slides as PNG so they can be merged into a new PDF<br />
 
 ## What's coming?
-
-🔜  Option to add the session's webcams <br />
-🔜  Cursor support <br />
-🔜  Chat, polls <br />
+🔜  Integration into Greenlight's UI
+🔜  Conversion of annotated slides into PDF using Cairo
+🔜  Support of further interactive elements such as the cursor, chat, and polls<br />
+🔜  Speed improvements
 
 ## How it works
 

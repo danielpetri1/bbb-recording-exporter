@@ -5,6 +5,7 @@ require 'fileutils'
 def download(file)
     # Base URL of the recording
     # Format: "https://hostname/presentation/meetingID/"
+    # base_url = "https://balancer.bbb.rbg.tum.de/presentation/f5c1fdc86039b1cd48cb686d38ec0eb6be27dfc7-1619030802001/"
     base_url = "https://balancer.bbb.rbg.tum.de/presentation/32660e42f95b3ba7a92c968cdc9e0c37272cf463-1613978884363/"
 
     path = base_url + file
@@ -49,14 +50,31 @@ hasCanvas = whiteboard.xpath('//@image').to_a.map(&:to_s)
 # Current frame and slide in the animation
 frameNumber = 0
 slideNumber = 0
-time = 0
 
 # For each slide, we write down the time it appears in the animation and create an SVG file displaying it
 slides.each do |slide|
+    # Get slide's background image
+    image = slide.attr('xlink:href')
+    
     # If the current slide has annotations drawn over it, we need to recreate the animation's frames
     if hasCanvas.include? slide.attr('id')
         # Finds correct frame elements given id
         frames = @doc.xpath("//*[@image=\"" + slide.attr('id').to_s + "\"]/*")
+
+        # Get timing information
+        canvasStart = frames.xpath('./@timestamp')[0]
+        canvasEnd = frames.xpath('./@timestamp').pop
+        
+        # Draw slide with no annotations
+        duration = (canvasStart.to_s.to_f - slide.attr('in').to_f).round(1)
+
+        File.open('whiteboard-timestamps-svg', 'a') do |file|
+            file.puts "file '" + image + "'"
+            file.puts "duration " + duration.to_s
+        end
+
+        # Draw the slides
+        frameTimings = frames.xpath('./@timestamp').to_a.map(&:to_s).map(&:to_f).each_cons(2).map { |a, b| (b-a).round(1) } << (slide.attr('out').to_f - canvasEnd.to_s.to_f).round(1)
 
         frames.each do |frame|
             # A frame is consists of the current drawn asset and the ones that came before it
@@ -98,42 +116,27 @@ slides.each do |slide|
             command = "rsvg-convert --format=png --output=frames/frame" + frameNumber.to_s + ".png frame" + frameNumber.to_s + ".svg"
             system(command)
 
-            duration = (frame.attr('timestamp').to_f - time).round(1)
+            # Duration of frame is the next element in the frameTimings queue
+            duration = frameTimings.shift
 
             File.open('whiteboard-timestamps-svg', 'a') do |file|
                 file.puts("file frames/frame" + frameNumber.to_s + ".png")
                 file.puts "duration " + duration.to_s
             end
 
-            time += duration
             frameNumber += 1
         end
-
-        # Export slide for later processing as annotated PDF file in Cairo by copying last completed PNG/SVG frame
-        open('slides/slide' + slideNumber.to_s + '.png', 'wb') do |file|
-            file << open('frames/frame' + (frameNumber - 1).to_s + '.png').read
-        end
-        
+    
     else
-        # Since the slide has no annotations drawn over it, we only need to render the frame itself
-        image = slide.attr('xlink:href')
 
-        # Duration of each slide, rounded to one decimal place
         duration = (slide.attr('out').to_f - slide.attr('in').to_f).round(1)
 
         File.open('whiteboard-timestamps-svg', 'a') do |file|
             file.puts "file '" + image + "'"
             file.puts "duration " + duration.to_s
         end
-
-        time += duration
-
-        # Export slide for later processing as annotated PDF file in Cairo by copying last completed PNG
-        open('slides/slide' + slideNumber.to_s + '.png', 'wb') do |file|
-            file << open(image).read
-        end
     end
-
+    
     slideNumber += 1
 end
 
@@ -141,13 +144,13 @@ end
 # ... 
 
 # Recreates the presentation with FFmpeg's Concat Demuxer (just slides + annotations + audio, fast due to variable frame rate)
-#system("ffmpeg -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:a -pix_fmt yuv420p -vsync vfr -vf \"scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:(ow-iw)/2:(oh-ih)/2\" -y presentation.mp4")
+#system("ffmpeg -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:a -pix_fmt yuv420p -vsync vfr -vf \"scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white\" -y presentation.mp4")
 
 # Remove created SVG frames
 system("rm frame*.svg")
 
 # Slides + Whiteboard + Screenshare
-#system("ffmpeg -i deskshare/deskshare.mp4 -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1 -map 2:a -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white[a];[0][a]overlay' -y presentation-deskshare.mp4")
+#system("ffmpeg -i deskshare/deskshare.mp4 -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:v -map 2:a -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:(ow-iw)/2:(oh-ih)/2:white[a];[0][a]overlay' -y presentation-deskshare.mp4")
 
 # Slides + Whiteboard + Screenshare + Webcam
 system("ffmpeg -i deskshare/deskshare.mp4 -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0 -map 1:v -map 2 -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white[a];[0][a]overlay[b];[2]scale=w=iw/4:h=ih/4[c];[b][c]overlay=x=(main_w-overlay_w)' -y presentation-deskshare-webcam.mp4")

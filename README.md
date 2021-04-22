@@ -1,7 +1,7 @@
 
 # BigBlueButton Downloader
 
-⚠️ **Still very buggy!**⚠️<br />
+⚠️ **Still a work in progress!**⚠️<br />
 
 A client- and (future) server side script to enable users to download a BigBlueButton recording as a single video file.
 

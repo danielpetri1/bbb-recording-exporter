@@ -1,6 +1,8 @@
 
 # BigBlueButton Downloader
 
+⚠️ **Still a work in progress!**⚠️<br />
+
 A client- and (future) server side script to enable users to download a BigBlueButton recording as a single video file.
 
 This is still a work in progress that downloads Big Blue Button's `shapes.svg` file to locally recreate the recording played in the browser as a `webm` or `.mp4` file.
@@ -12,10 +14,10 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 ✅  Saving annotated slides as PNG so they can be merged into a new PDF<br />
 
 ## What's coming?
-🔜  Integration into Greenlight's UI
-🔜  Conversion of annotated slides into PDF using Cairo
+🔜  Integration into Greenlight's UI<br />
+🔜  Conversion of annotated slides into PDF using Cairo<br />
 🔜  Support of further interactive elements such as the cursor, chat, and polls<br />
-🔜  Speed improvements
+🔜  Speed improvements<br />
 
 ## How it works
 

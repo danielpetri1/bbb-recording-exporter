@@ -28,8 +28,11 @@ end
 # Opens shapes.svg
 @doc = Nokogiri::XML(File.open("shapes.svg"))
 
-# Creates new file to hold the timestamps
-File.open("whiteboard-timestamps-svg", "w") {}
+# Creates new file to hold the timestamps of the whiteboard
+File.open("whiteboard-timestamps", "w") {}
+
+# Creates new file to hold the timestamps of the slides
+File.open("presentation-timestamps", "w") {}
 
 # Gets each slide in the presentation
 slides = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg', 'xlink' => 'http://www.w3.org/1999/xlink')
@@ -59,8 +62,21 @@ slideNumber = 0
 slides.each do |slide|
     # Get slide's background image
     image = slide.attr('xlink:href')
-    
-    # If the current slide has annotations drawn over it, we need to recreate the animation's frames
+
+    # Get SVG width and height
+    width = slide.attr('width')
+    height = slide.attr('height')
+
+    # How long the presentation slide is displayed for
+    duration = (slide.attr('out').to_f - slide.attr('in').to_f).round(1)
+
+    # Background image
+    File.open('presentation-timestamps', 'a') do |file|
+        file.puts "file '" + image + "'"
+        file.puts "duration " + duration.to_s
+    end
+
+    # Whiteboard: if the current slide has annotations drawn over it, we need to recreate the animation's frames
     if hasCanvas.include? slide.attr('id')
         # Finds correct frame elements given id
         frames = @doc.xpath("//*[@image=\"" + slide.attr('id').to_s + "\"]/*")
@@ -69,25 +85,37 @@ slides.each do |slide|
         canvasStart = frames.xpath('./@timestamp')[0]
         canvasEnd = frames.xpath('./@timestamp').pop
         
-        # Draw slide with no annotations
+        # Creates first slide, with no annotations
+        builder = Nokogiri::XML::Builder.new do |xml|
+            xml.svg(width: width, height: height, version: "1.1", 'xmlns' => "http://www.w3.org/2000/svg", 'xmlns:xlink' => "http://www.w3.org/1999/xlink") {
+            }
+        end
+
+        # Saves empty frame as SVG file
+        File.open("frames/frame" + frameNumber.to_s + ".svg", "w") do |file|
+            file.write(builder.to_xml)
+        end
+
         duration = (canvasStart.to_s.to_f - slide.attr('in').to_f).round(1)
 
-        # Prevents negative timestamps from making it into the file
+        # Prevents negative timestamps from making it into the file (must be fixed, has something to do with undo / going back in presentation)
         if duration < 0 then
             duration = (slide.attr('out').to_f - slide.attr('in').to_f).round(1)
 
-            File.open('whiteboard-timestamps-svg', 'a') do |file|
-                file.puts "file '" + image + "'"
+            File.open('whiteboard-timestamps', 'a') do |file|
+                file.puts "file frames/frame" + frameNumber.to_s + ".svg"
                 file.puts "duration " + duration.to_s
             end
 
             next
         end
 
-        File.open('whiteboard-timestamps-svg', 'a') do |file|
-            file.puts "file '" + image + "'"
+        File.open('whiteboard-timestamps', 'a') do |file|
+            file.puts "file frames/frame" + frameNumber.to_s + ".svg"
             file.puts "duration " + duration.to_s
         end
+
+        frameNumber += 1
 
         # Draw the frames
         frameTimings = frames.xpath('./@timestamp').to_a.map(&:to_s).map(&:to_f).each_cons(2).map { |a, b| (b-a).round(1) } << (slide.attr('out').to_f - canvasEnd.to_s.to_f).round(1)
@@ -95,11 +123,6 @@ slides.each do |slide|
         frames.each do |frame|
             # A frame is consists of the current drawn asset and the ones that came before it
             frameSiblings = frame.xpath('./self::*|preceding-sibling::*')
-            
-            # The background image needs to be made visible
-            style = slide.attr('style')
-            style.sub! 'hidden', 'visible'
-            slide.set_attribute('style', style)
 
             # All frame nodes need to be set to visible too
             frameSiblings.each do |node|
@@ -107,80 +130,101 @@ slides.each do |slide|
                 style.sub! 'hidden', 'visible'
                 node.set_attribute('style', style)
             end
-            
-            # Get SVG width and height
-            width = slide.attr('width')
-            height = slide.attr('height')
 
             # Builds SVG frame
             builder = Nokogiri::XML::Builder.new do |xml|
                 xml.svg(width: width, height: height, version: "1.1", 'xmlns' => "http://www.w3.org/2000/svg", 'xmlns:xlink' => "http://www.w3.org/1999/xlink") {
-                    # Adds backgrounds image
-                    xml << slide.to_s
-
                     # Adds whiteboard
                     xml << frameSiblings.to_s
                 }
             end
 
             # Saves frame as SVG file
-            File.open("frame" + frameNumber.to_s + ".svg", "w") do |file|
+            File.open("frames/frame" + frameNumber.to_s + ".svg", "w") do |file|
                 file.write(builder.to_xml)
             end
-
-            # Export image as PNG
-            command = "rsvg-convert --format=png --output=frames/frame" + frameNumber.to_s + ".png frame" + frameNumber.to_s + ".svg"
-            system(command)
 
             # Duration of frame is the next element in the frameTimings queue
             duration = frameTimings.shift
 
-            File.open('whiteboard-timestamps-svg', 'a') do |file|
-                file.puts("file frames/frame" + frameNumber.to_s + ".png")
+            File.open('whiteboard-timestamps', 'a') do |file|
+                file.puts("file frames/frame" + frameNumber.to_s + ".svg")
                 file.puts "duration " + duration.to_s
             end
 
             frameNumber += 1
         end
+        
+        # Export last frame as PNG
+        frameSiblings = frames.last.xpath('./self::*|preceding-sibling::*')
 
-        # Export slide for later processing as annotated PDF file in Cairo by copying last completed PNG/SVG frame
-        open('slides/slide' + slideNumber.to_s + '.png', 'wb') do |file|
-            file << open('frames/frame' + (frameNumber - 1).to_s + '.png').read
+        # The background image needs to be made visible
+        style = frames.last.attr('style')
+        style.sub! 'hidden', 'visible'
+        slide.set_attribute('style', style)
+
+        # All frame nodes need to be set to visible too
+        frameSiblings.each do |node|
+            style = node.attr('style')
+            style.sub! 'hidden', 'visible'
+            node.set_attribute('style', style)
         end
-    
-    else
-        duration = (slide.attr('out').to_f - slide.attr('in').to_f).round(1)
 
-        File.open('whiteboard-timestamps-svg', 'a') do |file|
-            file.puts "file '" + image + "'"
+        builder = Nokogiri::XML::Builder.new do |xml|
+            xml.svg(width: width, height: height, version: "1.1", 'xmlns' => "http://www.w3.org/2000/svg", 'xmlns:xlink' => "http://www.w3.org/1999/xlink") {
+                # Adds background image
+                xml << slide.to_s
+                
+                # Adds whiteboard
+                xml << frameSiblings.to_s
+        }
+        end
+
+        File.open("tmp.svg", "w") do |file|
+            file.write(builder.to_xml)
+        end
+        
+        #Exports last frame as PNG
+        export = "rsvg-convert --format=png --output=slides/slide" + slideNumber.to_s + ".png tmp.svg"
+        system(export)
+
+    else
+        # Don't show any annotations - empty SVG frame
+        builder = Nokogiri::XML::Builder.new do |xml|
+            xml.svg(width: width, height: height, version: "1.1", 'xmlns' => "http://www.w3.org/2000/svg", 'xmlns:xlink' => "http://www.w3.org/1999/xlink") {
+            }
+        end
+
+        # Saves empty frame as SVG file
+        File.open("frames/frame" + frameNumber.to_s + ".svg", "w") do |file|
+            file.write(builder.to_xml)
+        end
+
+        # Adds transparent frame to the whiteboard file
+        File.open('whiteboard-timestamps', 'a') do |file|
+            file.puts "file frames/frame" + frameNumber.to_s + ".svg"
             file.puts "duration " + duration.to_s
         end
 
-        # Export slide for later processing as annotated PDF file in Cairo by copying last completed PNG
+        # Saves slide for later PDF export
         open('slides/slide' + slideNumber.to_s + '.png', 'wb') do |file|
             file << open(image).read
         end
+        
+        frameNumber += 1
     end
     
     slideNumber += 1
 end
 
-# MP4 Slides + Whiteboard + Screenshare
-#system("ffmpeg -i deskshare/deskshare.mp4 -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:v -map 2:a -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:(ow-iw)/2:(oh-ih)/2:white[a];[0][a]overlay' -y presentation-deskshare.mp4")
+# Recreates the presentation slides
+system("ffmpeg -f concat -i presentation-timestamps -c:v libvpx-vp9 -b:v 2M -pix_fmt yuva420p -metadata:s:v:0 alpha_mode=\"1\" -vsync vfr -auto-alt-ref 0 -y -filter_complex 'scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white' presentation.webm")
 
-# MP4 Slides + Whiteboard + Webcam
-#system("ffmpeg -i video/webcams.mp4 -f concat -i whiteboard-timestamps-svg -filter_complex '[1]fps=fps=24[a];[0]scale=w=iw/4:h=ih/4[b];[a][b]overlay=x=(main_w-overlay_w)' -y -shortest presentation-webcam.mp4")
+# Recreates the whiteboard annotations
+system("ffmpeg -f concat -i whiteboard-timestamps -c:v libvpx-vp9 -b:v 2M -pix_fmt yuva420p -metadata:s:v:0 alpha_mode=\"1\" -vsync vfr -auto-alt-ref 0 -y -filter_complex 'scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white' whiteboard.webm")
 
-# MP4 Slides + Whiteboard + Screenshare + Webcam
-# system("ffmpeg -i deskshare/deskshare.mp4 -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0 -map 1:v -map 2 -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white[a];[0][a]overlay[b];[2]scale=w=iw/4:h=ih/4[c];[b][c]overlay=x=(main_w-overlay_w)' -y -shortest presentation-deskshare-webcam.mp4")
+# Presentation + Annotations + Deskshare + Webcams (.webm)
+system("ffmpeg -i deskshare/deskshare.mp4 -c:v libvpx-vp9 -i presentation.webm -c:v libvpx-vp9 -i whiteboard.webm -i video/webcams.mp4 -filter_complex '[3]scale=w=iw/4:h=ih/4[cam];[0][1]overlay[tmp];[tmp][2]overlay[out];[out][cam]overlay=x=(main_w-overlay_w)' -b:v 2M -shortest -y presentation-deskshare-webcam.webm")
 
-#ffmpeg -i deskshare/deskshare.mp4 -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0 -map 1:v -map 2 -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white[a];[0][a]overlay[b];[2]scale=w=iw/4:h=ih/4[c];[b][c]overlay=x=(main_w-overlay_w)' -y -shortest presentation-deskshare-webcam.mp4
-
-# Remove created SVG frames
-system("rm frame*.svg")
-
-# Recreates the presentation slides with the whiteboard annotations
-system("ffmpeg -f concat -i whiteboard-timestamps-svg -c:v libvpx -pix_fmt yuva420p -metadata:s:v:0 alpha_mode=\"1\" -vsync vfr -auto-alt-ref 0 -y whiteboard.webm")
-
-# Slides + Whiteboard + Screenshare + Webcam
-system("ffmpeg -i deskshare/deskshare.mp4 -c:v libvpx -i whiteboard.webm -i video/webcams.mp4 -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white[a];[0][a]overlay[b];[2]scale=w=iw/4:h=ih/4[c];[b][c]overlay=x=(main_w-overlay_w)' -shortest -y presentation-deskshare-webcam.webm")
+# Presentation + Annotations + Deskshare + Webcams (.mp4) - faster, patent encumbered
+#system("ffmpeg -i deskshare/deskshare.mp4 -c:v libvpx-vp9 -i presentation.webm -c:v libvpx-vp9 -i whiteboard.webm -i video/webcams.mp4 -filter_complex '[3]scale=w=iw/4:h=ih/4[cam];[0][1]overlay[tmp];[tmp][2]overlay[out];[out][cam]overlay=x=(main_w-overlay_w)' -shortest -y presentation-deskshare-webcam.mp4")

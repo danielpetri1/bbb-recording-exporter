@@ -1,16 +1,19 @@
 require 'nokogiri'
 require 'open-uri'
+require 'cgi'
 require 'fileutils'
 
+# Reference recording: "https://balancer.bbb.rbg.tum.de/playback/presentation/2.3/f5c1fdc86039b1cd48cb686d38ec0eb6be27dfc7-1619030802001?meetingId=f5c1fdc86039b1cd48cb686d38ec0eb6be27dfc7-1619030802001"
+
 def download(file)
-    # Base URL of the recording
-    # Format: "https://hostname/presentation/meetingID/"
+    # Format: "https://hostname/presentation/meetingID/file"
+    # path = "https://balancer.bbb.rbg.tum.de/presentation/f5c1fdc86039b1cd48cb686d38ec0eb6be27dfc7-1619030802001/" # If not indicated through CLI
 
-    base_url = "https://balancer.bbb.rbg.tum.de/presentation/f5c1fdc86039b1cd48cb686d38ec0eb6be27dfc7-1619030802001/"
-    #base_url = "https://balancer.bbb.rbg.tum.de/presentation/32660e42f95b3ba7a92c968cdc9e0c37272cf463-1613978884363/"
+    uri = URI.parse(ARGV[0])
+    meetingId = CGI.parse(uri.query)['meetingId'].first
+    path = URI::HTTP.build(:scheme => uri.scheme, :host => uri.host, :path => '/presentation/' + meetingId + '/' + file)
 
-    path = base_url + file
-    puts "Downloading " + path
+    puts "Downloading " + path.to_s
 
     open(file, 'wb') do |file|
         file << open(path).read
@@ -161,6 +164,17 @@ slides.each do |slide|
     
     slideNumber += 1
 end
+
+# MP4 Slides + Whiteboard + Screenshare
+#system("ffmpeg -i deskshare/deskshare.mp4 -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0:v -map 1:v -map 2:a -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:(ow-iw)/2:(oh-ih)/2:white[a];[0][a]overlay' -y presentation-deskshare.mp4")
+
+# MP4 Slides + Whiteboard + Webcam
+#system("ffmpeg -i video/webcams.mp4 -f concat -i whiteboard-timestamps-svg -filter_complex '[1]fps=fps=24[a];[0]scale=w=iw/4:h=ih/4[b];[a][b]overlay=x=(main_w-overlay_w)' -y -shortest presentation-webcam.mp4")
+
+# MP4 Slides + Whiteboard + Screenshare + Webcam
+# system("ffmpeg -i deskshare/deskshare.mp4 -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0 -map 1:v -map 2 -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white[a];[0][a]overlay[b];[2]scale=w=iw/4:h=ih/4[c];[b][c]overlay=x=(main_w-overlay_w)' -y -shortest presentation-deskshare-webcam.mp4")
+
+#ffmpeg -i deskshare/deskshare.mp4 -f concat -i whiteboard-timestamps-svg -i video/webcams.mp4 -c:a copy -map 0 -map 1:v -map 2 -filter_complex '[1]scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white[a];[0][a]overlay[b];[2]scale=w=iw/4:h=ih/4[c];[b][c]overlay=x=(main_w-overlay_w)' -y -shortest presentation-deskshare-webcam.mp4
 
 # Remove created SVG frames
 system("rm frame*.svg")

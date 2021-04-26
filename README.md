@@ -36,9 +36,11 @@ In your terminal, type
     ruby presentation-render.rb "URL_OF_YOUR_BBB-RECORDING"
 
 ### Required packages
-librsvg
-ffmpeg  version 4.4, ideally compiled with --enable-librsvg 
-Ruby with Nokogiri, open-uri, cgi, and fileutils
+librsvg<br />
+ffmpeg  version 4.4, ideally compiled with --enable-librsvg <br />
+Ruby with Nokogiri, open-uri, cgi, and fileutils<br />
+
+Only tested and developed on macOS Big Sur so far. <br />
 
 ## How it works
 

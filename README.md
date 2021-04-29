@@ -17,7 +17,13 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 
 ✅ Option to render the webcams and screen sharings (deskshare) in addition to the presentation<br  />
 
-✅ Saving annotated slides as PNG so they can be merged into a new PDF<br  />  
+✅ Saving annotated slides as PNG so they can be merged into a new PDF<br  />
+
+## What's currently being worked on?
+
+🔜 Transition from client- to server side code <br  />
+
+🔜 Rewrite of how annotations are rendered to fix bugs <br  />
 
 ## What's coming?
 

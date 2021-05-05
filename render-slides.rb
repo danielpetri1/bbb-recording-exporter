@@ -11,22 +11,22 @@ slides = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg', 'x
 
 # For each slide, write down the time it appears in the presentation
 slides.each do |slide|
-    # Get slide's background image
-    image = slide.attr('xlink:href')
-   
-    # How long the presentation slide is displayed for
-    duration = (slide.attr('out').to_f - slide.attr('in').to_f).round(1)
+  # Get slide's background image
+  image = slide.attr('xlink:href')
 
-    # Writes duration to file with the corresponding image
-    File.open('presentation-timestamps', 'a') do |file|
-        file.puts "file '#{image}'"
-        file.puts "duration #{duration}"
-    end
+  # How long the presentation slide is displayed for
+  duration = (slide.attr('out').to_f - slide.attr('in').to_f).round(1)
+
+  # Writes duration to file with the corresponding image
+  File.open('presentation-timestamps', 'a') do |file|
+    file.puts "file '#{image}'"
+    file.puts "duration #{duration}"
+  end
 end
 
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
 image = slides.last.attr('xlink:href')
 
 File.open('presentation-timestamps', 'a') do |file|
-    file.puts "file '#{image}'"
+  file.puts "file '#{image}'"
 end

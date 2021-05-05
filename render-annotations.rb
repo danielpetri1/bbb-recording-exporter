@@ -1,8 +1,11 @@
 require 'nokogiri'
 
 def renderAnimatedAnnotations(frames, shapes, slideEnd, width, height, x, y, frameNumber, keep)
+    undos = frames.xpath('./@undos')
+    timestamps = frames.xpath('./@timestamps')
+
     # Initialize queue holding the duration of each frame in the shape's animation
-    frameTimings = frames.xpath('./@timestamp').to_a.map(&:to_s).map(&:to_f).each_cons(2).map do
+    frameTimings = (timestamps + undos).to_a.map(&:to_s).map(&:to_f).each_cons(2).map do
         |a, b| (b - a).round(1)
     end << (slideEnd - frames.last.attr('timestamp').to_s.to_f).round(1)
 
@@ -14,11 +17,8 @@ def renderAnimatedAnnotations(frames, shapes, slideEnd, width, height, x, y, fra
             # Builds SVG frame
             builder = Nokogiri::XML::Builder.new do |xml|
                 xml.svg(width: width, height: height, x: x, y: y, version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
-
                     # Adds what came before
-                    keep.each do |drawing|
-                        xml << drawing.to_s
-                    end
+                    xml << keep
 
                     # Adds annotations at given timestamp
                     xml << frame.to_s
@@ -89,7 +89,7 @@ def renderAnimatedAnnotations(frames, shapes, slideEnd, width, height, x, y, fra
 end
 
 # Opens shapes.svg
-@doc = Nokogiri::XML(File.open('shapes.svg'))
+@doc = Nokogiri::XML(File.open('shapes copy.svg'))
 
 # Creates new file to hold the timestamps of the whiteboard
 File.open('whiteboard-timestamps', 'w') {}
@@ -133,7 +133,7 @@ slides.each do |slide|
         if(frames.attr('timestamp').to_s.to_f <= slideStart) then
         
             # Show up to timestamp
-            before = canvas.xpath('./xmlns:g[@timestamp <= ' + slideStart.to_s + 'and @undo = -1]')
+            before = canvas.xpath('./xmlns:g[@timestamp <= ' + slideStart.to_s + 'and (@undo = -1 or @timestamp < @undo)]')
 
             after = canvas.xpath('./xmlns:g[@timestamp > ' + slideStart.to_s + ']')
 
@@ -141,7 +141,7 @@ slides.each do |slide|
             builder = Nokogiri::XML::Builder.new do |xml|
             xml.svg(width: width, height: height, x: x, y: y, version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
                     # Adds annotations at given timestamp
-                        xml << before.to_s
+                    xml << before.to_s
                 end
             end
 

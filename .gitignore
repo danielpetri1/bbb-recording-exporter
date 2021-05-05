@@ -10,5 +10,4 @@
 !presentation/
 !frames/
 !deskshare/
-!render-annotations.rb
-!render-annotation-frames.rb
+!render-whiteboard.rb

@@ -1,7 +1,7 @@
 require 'nokogiri'
 
 # Opens shapes.svg
-@doc = Nokogiri::XML(File.open('shapes copy.svg'))
+@doc = Nokogiri::XML(File.open('shapes.svg'))
 
 # Get intervals to display the frames
 ins = @doc.xpath('//@in')
@@ -108,5 +108,3 @@ frames.each do |frame|
 
     frameNumber += 1
 end
-
-system("ffmpeg -f concat -i whiteboard-timestamps -c:v libvpx-vp9 -b:v 2500k -pix_fmt yuva420p -metadata:s:v:0 alpha_mode=\"1\" -vsync vfr -auto-alt-ref 0 -y -filter_complex 'scale=w=1920:h=1080:force_original_aspect_ratio=1,pad=1920:1080:-1:-1:white' whiteboard.webm")

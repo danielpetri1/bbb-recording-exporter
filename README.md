@@ -17,8 +17,6 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 
 ✅ Option to render the webcams and screen sharings (deskshare) in addition to the presentation<br  />
 
-✅ Saving annotated slides as PNG so they can be merged into a new PDF<br  />  
-
 ## What's coming?
 
 🔜 Integration into Greenlight's UI<br  />
@@ -27,13 +25,27 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 
 🔜 Support of further interactive elements such as the cursor, chat, and polls<br  />
 
+🔜 Saving annotated slides as PNG so they can be merged into a new PDF<br  />  
+
 🔜 Speed improvements<br  />
 
 
 ## Usage
 In your terminal, type
 
-    ruby presentation-render.rb "URL_OF_YOUR_BBB-RECORDING"
+    ruby download-client.rb "URL_OF_YOUR_BBB-RECORDING"
+
+Create the presentation with
+
+    ruby render-slides.rb
+
+and the whiteboard with
+
+    ruby render-whiteboard.rb
+
+To then render the video, run
+
+    ruby render-video.rb
 
 ### Requirements
 librsvg<br />

@@ -2,7 +2,6 @@
 */
 !.gitignore
 !README.md
-!presentation-render.rb
 !LICENSE
 !video/
 !deskshare/
@@ -10,4 +9,7 @@
 !presentation/
 !frames/
 !deskshare/
+!render-slides.rb
 !render-whiteboard.rb
+!download-client.rb
+!render-video.rb

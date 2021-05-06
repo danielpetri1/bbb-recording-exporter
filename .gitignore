@@ -9,7 +9,7 @@
 !presentation/
 !frames/
 !deskshare/
-!render-slides.rb
-!render-whiteboard.rb
-!download-client.rb
-!render-video.rb
+!render_slides.rb
+!render_whiteboard.rb
+!download_client.rb
+!render_video.rb

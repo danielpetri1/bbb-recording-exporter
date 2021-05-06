@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Reference recording: "https://balancer.bbb.rbg.tum.de/playback/presentation/2.3/f5c1fdc86039b1cd48cb686d38ec0eb6be27dfc7-1619030802001?meetingId=f5c1fdc86039b1cd48cb686d38ec0eb6be27dfc7-1619030802001"
 require 'nokogiri'
 require 'open-uri'
@@ -6,13 +8,15 @@ require 'fileutils'
 
 def download(file)
   # Format: "https://hostname/presentation/meetingID/file"
-  # path = "https://balancer.bbb.rbg.tum.de/presentation/f5c1fdc86039b1cd48cb686d38ec0eb6be27dfc7-1619030802001/" # If not indicated through CLI
+
+  # If not indicated through CLI:
+  # path = "https://balancer.bbb.rbg.tum.de/presentation/f5c1fdc86039b1cd48cb686d38ec0eb6be27dfc7-1619030802001/"
 
   uri = URI.parse(ARGV[0])
-  meetingId = CGI.parse(uri.query)['meetingId'].first
-  path = URI::HTTP.build(scheme: uri.scheme, host: uri.host, path: '/presentation/' + meetingId + '/' + file)
+  meeting_id = CGI.parse(uri.query)['meetingId'].first
+  path = URI::HTTP.build(scheme: uri.scheme, host: uri.host, path: "/presentation/#{meeting_id}/#{file}")
 
-  puts 'Downloading ' + path.to_s
+  puts "Downloading #{path}"
 
   open(file, 'wb') do |file|
     file << open(path).read

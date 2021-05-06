@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'nokogiri'
 
 # Opens shapes.svg
@@ -12,13 +14,13 @@ undos = @doc.xpath('//@undo')
 intervals = (ins + outs + timestamps + undos).to_a.map(&:to_s).map(&:to_f).uniq.sort
 
 # Creates new file to hold the timestamps of the whiteboard
-File.open('whiteboard-timestamps', 'w') {}
+File.open('whiteboard_timestamps', 'w') {}
 
 # If a value of -1 does not correspond to a timestamp
 intervals = intervals.drop(1) if intervals.first == -1
 
 # Obtain interval range that each frame will be shown for
-frameNumber = 0
+frame_number = 0
 frames = []
 
 intervals.each_cons(2) do |(a, b)|
@@ -27,19 +29,16 @@ end
 
 # Render the visible frame for each interval
 frames.each do |frame|
-  intervalStart = frame[0]
-  intervalEnd = frame[1]
-
-  # Frame's duration
-  duration = (intervalEnd - intervalStart).round(1)
+  interval_start = frame[0]
+  interval_end = frame[1]
 
   # Figure out which slide we're currently on
-  slide = @doc.xpath('//*[@in <= ' + intervalStart.to_s + ' and ' + intervalEnd.to_s + ' <= @out]')
+  slide = @doc.xpath("//*[@in <= #{interval_start} and #{interval_end} <= @out]")
 
   # Get slide information
   # slideStart = slide.attr('in').to_s.to_f
   # slideEnd = slide.attr('out').to_s.to_f
-  slideId = slide.attr('id').to_s
+  slide_id = slide.attr('id').to_s
   width = slide.attr('width').to_s
   height = slide.attr('height').to_s
 
@@ -47,11 +46,11 @@ frames.each do |frame|
   y = slide.attr('y').to_s
 
   # Get slide's canvas
-  canvas = @doc.xpath('//xmlns:g[@class="canvas" and @image="' + slideId.to_s + '"]',
+  canvas = @doc.xpath("//xmlns:g[@class=\"canvas\" and @image=\"#{slide_id}\"]",
                       'xmlns' => 'http://www.w3.org/2000/svg', 'xlink' => 'http://www.w3.org/1999/xlink')
 
   # Render up until interval end
-  draw = canvas.xpath('./xmlns:g[@timestamp < ' + intervalEnd.to_s + ']')
+  draw = canvas.xpath("./xmlns:g[@timestamp < #{interval_end}]")
 
   # Remove redundant shapes
   shapes = []
@@ -62,11 +61,11 @@ frames.each do |frame|
   end
 
   # Add this shape to what will be rendered
-  if draw.length > 0
+  if draw.length.positive?
 
     shapes.uniq.each do |shape|
       selection = draw.select do |drawing|
-        drawing.attr('shape') == shape && (drawing.attr('undo') == '-1' || drawing.attr('undo').to_s.to_f >= intervalEnd)
+        drawing.attr('shape') == shape && (drawing.attr('undo') == '-1' || drawing.attr('undo').to_s.to_f >= interval_end)
       end
       render << selection.last
     end
@@ -92,15 +91,20 @@ frames.each do |frame|
   end
 
   # Saves frame as SVG file
-  File.open("frames/frame#{frameNumber}.svg", 'w') do |file|
+  File.open("frames/frame#{frame_number}.svg", 'w') do |file|
     file.write(builder.to_xml)
   end
 
   # Writes its duration down
-  File.open('whiteboard-timestamps', 'a') do |file|
-    file.puts "file frames/frame#{frameNumber}.svg"
-    file.puts "duration #{(intervalEnd - intervalStart).round(1)}"
+  File.open('whiteboard_timestamps', 'a') do |file|
+    file.puts "file frames/frame#{frame_number}.svg"
+    file.puts "duration #{(interval_end - interval_start).round(1)}"
   end
 
-  frameNumber += 1
+  frame_number += 1
+end
+
+# The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
+File.open('whiteboard_timestamps', 'a') do |file|
+  file.puts "file frames/frame#{frame_number - 1}.svg"
 end

@@ -1,10 +1,12 @@
+# frozen_string_literal: true
+
 require 'nokogiri'
 
 # Opens shapes.svg
 @doc = Nokogiri::XML(File.open('shapes.svg'))
 
 # Creates new file to hold the timestamps of the slides
-File.open('presentation-timestamps', 'w') {}
+File.open('presentation_timestamps', 'w') {}
 
 # Gets each slide in the presentation
 slides = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg', 'xlink' => 'http://www.w3.org/1999/xlink')
@@ -18,7 +20,7 @@ slides.each do |slide|
   duration = (slide.attr('out').to_f - slide.attr('in').to_f).round(1)
 
   # Writes duration to file with the corresponding image
-  File.open('presentation-timestamps', 'a') do |file|
+  File.open('presentation_timestamps', 'a') do |file|
     file.puts "file '#{image}'"
     file.puts "duration #{duration}"
   end
@@ -27,6 +29,6 @@ end
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
 image = slides.last.attr('xlink:href')
 
-File.open('presentation-timestamps', 'a') do |file|
+File.open('presentation_timestamps', 'a') do |file|
   file.puts "file '#{image}'"
 end

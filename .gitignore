@@ -13,3 +13,4 @@
 !render_whiteboard.rb
 !download_client.rb
 !render_video.rb
+!export_annotated_slides.rb

@@ -3,8 +3,6 @@
 
 # BigBlueButton Exporter
 
-  
-
 ⚠️ **Still a work in progress!** ⚠️<br  />
 
 A client- and (future) server side script to enable users to download a BigBlueButton recording as a single video file.
@@ -13,9 +11,9 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 
 ## What's supported?
 
-✅ Quick export of BigBlueButton presentations containing audio, slides and whiteboard annotations<br  />
-
+✅ Export of BigBlueButton presentations containing audio, slides and whiteboard annotations<br  />
 ✅ Option to render the webcams and screen sharings (deskshare) in addition to the presentation<br  />
+✅ Saving annotated slides as PNG so they can be merged into a new PDF<br  /> 
 
 ## What's coming?
 
@@ -23,9 +21,7 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 
 🔜 Conversion of annotated slides into PDF using Cairo<br  />
 
-🔜 Support of further interactive elements such as the cursor, chat, and polls<br  />
-
-🔜 Saving annotated slides as PNG so they can be merged into a new PDF<br  />  
+🔜 Support of further interactive elements such as the cursor, chat, and polls<br  /> 
 
 🔜 Speed improvements<br  />
 
@@ -46,6 +42,12 @@ and the whiteboard with
 To then render the video, run
 
     ruby render_video.rb
+
+If you want to get the slides with the whiteboard annotations
+
+    ruby export_annotated_slides.rb
+
+and open the 'slides' folder.
 
 ### Requirements
 librsvg<br />

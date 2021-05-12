@@ -9,7 +9,7 @@ require 'nokogiri'
 File.open('presentation_timestamps', 'w') {}
 
 # Gets each slide in the presentation
-slides = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg', 'xlink' => 'http://www.w3.org/1999/xlink')
+slides = @doc.xpath('//xmlns:image[@class="slide"]', 'xmlns' => 'http://www.w3.org/2000/svg', 'xlink' => 'http://www.w3.org/1999/xlink')
 
 # For each slide, write down the time it appears in the presentation
 slides.each do |slide|

@@ -8,13 +8,16 @@ require 'fileutils'
 
 def download(file)
   # Format: "https://hostname/presentation/meetingID/file"
+  
+  # Lasttest
+  path = "https://vmott40.in.tum.de/presentation/b87bbe0888dff19aa181be51d86a3f52543fc5a7-1620820241322/#{file}"
 
-  # If not indicated through CLI:
-  # path = "https://balancer.bbb.rbg.tum.de/presentation/f5c1fdc86039b1cd48cb686d38ec0eb6be27dfc7-1619030802001/"
-
-  uri = URI.parse(ARGV[0])
-  meeting_id = CGI.parse(uri.query)['meetingId'].first
-  path = URI::HTTP.build(scheme: uri.scheme, host: uri.host, path: "/presentation/#{meeting_id}/#{file}")
+  # Pink Cube
+  # path = "https://vmott40.in.tum.de/presentation/b87bbe0888dff19aa181be51d86a3f52543fc5a7-1620639249054/#{file}"
+  
+  #uri = URI.parse(ARGV[0])
+  #meeting_id = CGI.parse(uri.query)['meetingId'].first
+  #path = URI::HTTP.build(scheme: uri.scheme, host: uri.host, path: "/presentation/#{meeting_id}/#{file}")
 
   puts "Downloading #{path}"
 
@@ -28,7 +31,7 @@ end
 # Video: 'video/webcams.mp4', 'deskshare/deskshare.mp4'
 # Chat: 'slides_new.xml'
 
-['shapes.svg', 'video/webcams.mp4', 'deskshare/deskshare.mp4'].each do |get|
+['shapes.svg', 'cursor.xml', 'panzooms.xml', 'presentation_text.json', 'captions.json', 'metadata.xml', 'video/webcams.webm', 'slides_new.xml'].each do |get|
   download(get)
 end
 

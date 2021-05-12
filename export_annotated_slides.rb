@@ -21,7 +21,6 @@ end
 slides.each do |slide|
   width = slide.attr('width')
   height = slide.attr('height')
-  out = slide.attr('out')
   slide_id = slide.attr('id')
 
   # Gets the canvas of that slide

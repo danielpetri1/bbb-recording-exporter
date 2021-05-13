@@ -1,3 +1,4 @@
+#!/usr/bin/env ruby
 # frozen_string_literal: true
 
 require 'nokogiri'
@@ -45,56 +46,26 @@ frames.each do |frame|
 
   # Get slide information
   slide_id = slide.attr('id').to_s
+  slide_class = slide.attr('class').to_s
+  
   width = slide.attr('width').to_s
   height = slide.attr('height').to_s
-
   x = slide.attr('x').to_s
   y = slide.attr('y').to_s
 
-  # Get slide's canvas
-  #canvas = @doc.xpath("//xmlns:g[@class=\"canvas\" and @image=\"#{slide_id}\"]",
-  #                    'xmlns' => 'http://www.w3.org/2000/svg', 'xlink' => 'http://www.w3.org/1999/xlink')
-
-  # Render up until interval end
-  #draw = canvas.xpath("./xmlns:g[@timestamp < #{interval_end}]")
+  viewBox = '0 0 1600 900'
 
   draw = @doc.xpath('//xmlns:g[@class="canvas" and @image="' + slide_id.to_s + '"]/xmlns:g[@timestamp < "' + interval_end.to_s + '" and (@undo = "-1" or @undo >= "' + interval_end.to_s + '")]', 'xmlns' => 'http://www.w3.org/2000/svg')
 
-  #draw.remove_attribute('id')
-  #draw.remove_attribute('class')
-  #draw.remove_attribute('timestamp')
-  #draw.remove_attribute('undo')
-  #draw.remove_attribute('shape')
-
-  # Remove redundant shapes
-  # shapes = []
-  # render = []
-
-  #draw.each do |shape|
-  #  shapes << shape.attr('shape').to_s
-  # end
-
-  # Add this shape to what will be rendered
-  # if draw.length.positive?
-
-  #  shapes.uniq.each do |shape|
-  #    selection = draw.select do |drawing|
-  #      drawing.attr('shape') == shape && (drawing.attr('undo') == '-1' || drawing.attr('undo').to_s.to_f >= interval_end)
-  #    end
-
-  #    unless selection.last.nil?
-  #      render << selection.last
-  #    end
-  #  end
-  #end
-
   # Builds SVG frame
-  builder = Nokogiri::XML::Builder.new do |xml|
-    xml.svg(width: width, height: height, x: x, y: y, version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg',
-            'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
+  builder = Nokogiri::XML::Builder.new(:encoding => 'UTF-8') do |xml|
+    
+    xml.doc.create_internal_subset('svg','-//W3C//DTD SVG 1.1//EN','http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
+
+    xml.svg(width: width, height: height, x: x, y: y, version: '1.1', viewBox: viewBox, 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
       
-      # Display background image (optional, FFMpeg doesn't show it...)
-      xml << slide.to_s
+      # Display background image
+      xml.image(id: slide_id, class: slide_class, 'xlink:href': slide.attr('href'), width: width, height: height, x: x, y: y, style: slide.attr('style'))
 
       # Add annotations
       draw.each do |shape|
@@ -102,9 +73,12 @@ frames.each do |frame|
         # Make shape visible
         style = shape.attr('style')
         style.sub! 'hidden', 'visible'
-        shape.set_attribute('style', style)
+        #shape.set_attribute('style', style)
+        
+        xml.g(id: shape.attr('id'), style: style) do
+          xml << shape.xpath('./*').to_s
+        end
 
-        xml << shape.to_s
       end
     end
   end

@@ -59,23 +59,6 @@ frames.each do |frame|
     "//xmlns:g[@class=\"canvas\" and @image=\"#{slide_id}\"]/xmlns:g[@timestamp < \"#{interval_end}\" and (@undo = \"-1\" or @undo >= \"#{interval_end}\")]", 'xmlns' => 'http://www.w3.org/2000/svg'
   )
 
-  # Removes redundant frames that compose the shape's animation
-  # For backwards-compability with BBB 2.2, live whiteboard not supported in BBB 2.3
-
-  shapes = draw.xpath('./@shape')
-
-  shapes.each do |shape|
-    # Remove every frame that led up to the final state of the annotation
-    delete = shape.xpath('parent::*')
-    keep = delete.last
-    draw -= delete
-
-    # Add final state of the shape
-    draw.push(keep)
-  end
-
-  # -----------------------------------
-
   # Builds SVG frame
   builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
     xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
@@ -89,7 +72,6 @@ frames.each do |frame|
         # Make shape visible
         style = shape.attr('style')
         style.sub! 'hidden', 'visible'
-        # shape.set_attribute('style', style)
 
         xml.g(id: shape.attr('id'), style: style) do
           xml << shape.xpath('./*').to_s

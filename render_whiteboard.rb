@@ -58,7 +58,7 @@ frames.each do |frame|
   # Render up until interval end
   #draw = canvas.xpath("./xmlns:g[@timestamp < #{interval_end}]")
 
-  draw = @doc.xpath('//xmlns:g[@class="canvas" and @image="' + slide_id.to_s + '"]/xmlns:g[@timestamp < ' + interval_end.to_s + ' and (@undo = -1 or @undo > ' + interval_end.to_s + ')]', 'xmlns' => 'http://www.w3.org/2000/svg')
+  draw = @doc.xpath('//xmlns:g[@class="canvas" and @image="' + slide_id.to_s + '"]/xmlns:g[@timestamp < "' + interval_end.to_s + '" and (@undo = "-1" or @undo >= "' + interval_end.to_s + '")]', 'xmlns' => 'http://www.w3.org/2000/svg')
 
   #draw.remove_attribute('id')
   #draw.remove_attribute('class')

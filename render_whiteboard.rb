@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require 'nokogiri'
+require 'base64'
 
 # Opens shapes.svg
 @doc = Nokogiri::XML(File.open('shapes.svg'))
@@ -15,10 +16,15 @@ images = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg')
 
 intervals = (ins + outs + timestamps + undos).to_a.map(&:to_s).map(&:to_f).uniq.sort
 
-# Update image paths since files are saved in ./frames
+# Image paths need to follow the URI Data Scheme (for slides and polls)
 images.each do |image|
   path = image.attr('xlink:href')
-  image.set_attribute('xlink:href', "../#{path}")
+
+  # Open the image
+  puts path
+  data = File.open(path).read
+
+  image.set_attribute('xlink:href', "data:image/#{File.extname(path).delete('.')};base64,#{Base64.encode64(data)}")
   image.set_attribute('style', 'visibility:visible')
 end
 
@@ -46,7 +52,6 @@ frames.each do |frame|
 
   # Get slide information
   slide_id = slide.attr('id').to_s
-  slide_class = slide.attr('class').to_s
 
   width = slide.attr('width').to_s
   height = slide.attr('height').to_s
@@ -65,7 +70,7 @@ frames.each do |frame|
 
     xml.svg(width: width, height: height, x: x, y: y, version: '1.1', viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
       # Display background image
-      xml.image(id: slide_id, class: slide_class, 'xlink:href': slide.attr('href'), width: width, height: height, x: x, y: y, style: slide.attr('style'))
+      xml.image('xlink:href': slide.attr('href'), width: width, height: height, x: x, y: y, style: slide.attr('style'))
 
       # Add annotations
       draw.each do |shape|
@@ -73,7 +78,7 @@ frames.each do |frame|
         style = shape.attr('style')
         style.sub! 'hidden', 'visible'
 
-        xml.g(id: shape.attr('id'), style: style) do
+        xml.g(style: style) do
           xml << shape.xpath('./*').to_s
         end
       end

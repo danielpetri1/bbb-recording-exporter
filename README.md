@@ -5,15 +5,18 @@
 
 ⚠️ **Still a work in progress!** ⚠️<br  />
 
-A client- and (future) server side script to enable users to download a BigBlueButton recording as a single video file.
+A client- and (future) server side script to enable users to download a BigBlueButton 2.3-dev recording as a single video file.
 
-This is still a work in progress that downloads Big Blue Button's `shapes.svg` file to locally recreate the recording played in the browser as a `webm` or `.mp4` file.
+This is still a work in progress that downloads Big Blue Button's `shapes.svg` file to locally recreate the recording played in the browser as a `.mp4` file.
 
 ## What's supported?
 
-✅ Export of BigBlueButton presentations containing audio, slides and whiteboard annotations<br  />
-✅ Option to render the webcams and screen sharings (deskshare) in addition to the presentation<br  />
-✅ Saving annotated slides as PNG so they can be merged into a new PDF<br  /> 
+✅  Whiteboard slides with annotations <br  />
+✅  Webcams <br  />
+✅  Screen shares <br  />
+✅  Polls <br  />
+✅  Cursor <br  />
+✅  Saving annotated slides as PNG so they can be merged into a new PDF<br  />
 
 ## What's coming?
 
@@ -21,19 +24,22 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 
 🔜 Conversion of annotated slides into PDF using Cairo<br  />
 
-🔜 Support of further interactive elements such as the cursor, chat, and polls<br  /> 
-
-🔜 Speed improvements<br  />
+🔜 Support of further interactive elements such as the chat, text and panzooms <br  /> 
 
 
 ## Usage
-In your terminal, type
+In the `download_client.rb` file, change the `path` variable to reflect your BBB recording link like so:
+    
+    path = "https://hostname/presentation/meetingID/#{file}"
 
-    ruby download_client.rb "URL_OF_YOUR_BBB-RECORDING"
+Make sure to adapt the array beginning with `shapes.svg` to reflect your recording, changing file extensions and removing the deskshare if necessary.
+Run with
 
-Create the presentation with
+    ruby download_client.rb
 
-    ruby render_slides.rb
+Render the presentation and the whiteboard with
+
+    ruby render_whiteboard.rb
 
 and the whiteboard with
 
@@ -43,14 +49,13 @@ To then render the video, run
 
     ruby render_video.rb
 
-If you want to get the slides with the whiteboard annotations
+If you want to get the slides with the whiteboard annotations (currently still requires librsvg)
 
     ruby export_annotated_slides.rb
 
 and open the 'slides' folder.
 
 ### Requirements
-librsvg<br />
 ffmpeg  version 4.4, compiled with --enable-librsvg <br />
 Ruby with Nokogiri, open-uri, cgi, and fileutils<br />
 

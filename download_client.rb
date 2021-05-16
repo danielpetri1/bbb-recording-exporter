@@ -9,16 +9,13 @@ require 'fileutils'
 def download(file)
   # Format: "https://hostname/presentation/meetingID/file"
   
-  # Lasttest
-  path = "https://vmott40.in.tum.de/presentation/b87bbe0888dff19aa181be51d86a3f52543fc5a7-1620820241322/#{file}"
-
-  # Pink Cube
-  # path = "https://vmott40.in.tum.de/presentation/b87bbe0888dff19aa181be51d86a3f52543fc5a7-1620639249054/#{file}"
+  # Uncomment this right here
+  # path = 
   
   #uri = URI.parse(ARGV[0])
   #meeting_id = CGI.parse(uri.query)['meetingId'].first
   #path = URI::HTTP.build(scheme: uri.scheme, host: uri.host, path: "/presentation/#{meeting_id}/#{file}")
-
+  
   puts "Downloading #{path}"
 
   File.open(file, 'wb') do |get|

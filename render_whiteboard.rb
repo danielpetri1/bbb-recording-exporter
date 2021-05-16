@@ -21,7 +21,6 @@ images.each do |image|
   path = image.attr('xlink:href')
 
   # Open the image
-  puts path
   data = File.open(path).read
 
   image.set_attribute('xlink:href', "data:image/#{File.extname(path).delete('.')};base64,#{Base64.encode64(data)}")
@@ -29,7 +28,7 @@ images.each do |image|
 end
 
 # Creates new file to hold the timestamps of the whiteboard
-File.open('whiteboard_timestamps', 'w') {}
+File.open('timestamps/whiteboard_timestamps', 'w') {}
 
 # Intervals with a value of -1 do not correspond to a timestamp
 intervals = intervals.drop(1) if intervals.first == -1
@@ -91,16 +90,15 @@ frames.each do |frame|
   end
 
   # Writes its duration down
-  File.open('whiteboard_timestamps', 'a') do |file|
-    file.puts "file frames/frame#{frame_number}.svg"
+  File.open('timestamps/whiteboard_timestamps', 'a') do |file|
+    file.puts "file ../frames/frame#{frame_number}.svg"
     file.puts "duration #{(interval_end - interval_start).round(1)}"
   end
 
   frame_number += 1
-  puts frame_number
 end
 
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
-File.open('whiteboard_timestamps', 'a') do |file|
-  file.puts "file frames/frame#{frame_number - 1}.svg"
+File.open('timestamps/whiteboard_timestamps', 'a') do |file|
+  file.puts "file ../frames/frame#{frame_number - 1}.svg"
 end

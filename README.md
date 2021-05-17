@@ -45,9 +45,9 @@ and the whiteboard with
 
     ruby render_whiteboard.rb
 
-To then render the video, run
+To then render the video, run the desired ffmpeg command in
 
-    ruby render_video.rb
+    render_video.rb
 
 If you want to get the slides with the whiteboard annotations (currently still requires librsvg)
 

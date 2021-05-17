@@ -3,6 +3,7 @@
 
 require 'nokogiri'
 require 'base64'
+require 'zlib'
 
 # Opens shapes.svg
 @doc = Nokogiri::XML(File.open('shapes.svg'))
@@ -11,7 +12,7 @@ require 'base64'
 ins = @doc.xpath('//@in')
 outs = @doc.xpath('//@out')
 timestamps = @doc.xpath('//@timestamp')
-undos = @doc.xpath('//@undo')
+undos = @doc.xpath('//@undo') 
 images = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg')
 
 intervals = (ins + outs + timestamps + undos).to_a.map(&:to_s).map(&:to_f).uniq.sort
@@ -84,21 +85,24 @@ frames.each do |frame|
     end
   end
 
-  # Saves frame as SVG file
-  File.open("frames/frame#{frame_number}.svg", 'w') do |file|
-    file.write(builder.to_xml)
+  # Saves frame as SVGZ file
+  File.open("frames/frame#{frame_number}.svgz", 'w') do |file|
+    svgz = Zlib::GzipWriter.new(file)
+    svgz.write(builder.to_xml)
+    svgz.close
   end
 
   # Writes its duration down
   File.open('timestamps/whiteboard_timestamps', 'a') do |file|
-    file.puts "file ../frames/frame#{frame_number}.svg"
+    file.puts "file ../frames/frame#{frame_number}.svgz"
     file.puts "duration #{(interval_end - interval_start).round(1)}"
   end
 
   frame_number += 1
+  puts frame_number
 end
 
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
 File.open('timestamps/whiteboard_timestamps', 'a') do |file|
-  file.puts "file ../frames/frame#{frame_number - 1}.svg"
+  file.puts "file ../frames/frame#{frame_number - 1}.svgz"
 end

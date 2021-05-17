@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require 'nokogiri'
+require 'zlib'
 
 # Opens cursor.xml and shapes.svg
 @doc = Nokogiri::XML(File.open('cursor.xml'))
@@ -48,21 +49,23 @@ frames.each do |frame|
 
     # Builds SVG frame
     builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-        xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
+        #xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
 
         xml.svg(width: width, height: height, x: x, y: y, version: '1.1', viewBox: '0 0 1600 900', 'xmlns' => 'http://www.w3.org/2000/svg') do
             xml.circle(cx: cursor_x, cy: cursor_y, r: '10', fill: 'red') unless cursor_x.negative? || cursor_y.negative?
         end
     end
 
-    # Saves frame as SVG file
-    File.open("cursor/cursor#{frame_number}.svg", 'w') do |file|
-        file.write(builder.to_xml)
+    # Saves frame as SVGZ file
+    File.open("cursor/cursor#{frame_number}.svgz", 'w') do |file|
+        svgz = Zlib::GzipWriter.new(file)
+        svgz.write(builder.to_xml)
+        svgz.close
     end
 
     # Writes its duration down
     File.open('timestamps/cursor_timestamps', 'a') do |file|
-        file.puts "file ../cursor/cursor#{frame_number}.svg"
+        file.puts "file ../cursor/cursor#{frame_number}.svgz"
         file.puts "duration #{(interval_end - interval_start).round(1)}"
     end
 
@@ -71,5 +74,5 @@ end
 
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
 File.open('timestamps/cursor_timestamps', 'a') do |file|
-    file.puts "file ../cursor/cursor#{frame_number - 1}.svg"
+    file.puts "file ../cursor/cursor#{frame_number - 1}.svgz"
 end

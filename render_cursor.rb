@@ -4,9 +4,12 @@
 require 'nokogiri'
 require 'zlib'
 
+start = Time.now
+
 # Opens cursor.xml and shapes.svg
 @doc = Nokogiri::XML(File.open('cursor.xml'))
 @img = Nokogiri::XML(File.open('shapes.svg'))
+@pan = Nokogiri::XML(File.open('panzooms.xml'))
 
 # Get intervals to display the frames
 timestamps = @doc.xpath('//@timestamp')
@@ -26,14 +29,16 @@ end
 
 # Obtains all cursor events
 cursor = @doc.xpath('//event/cursor', 'xmlns' => 'http://www.w3.org/2000/svg')
-images = @img.xpath("//xmlns:image", 'xmlns' => 'http://www.w3.org/2000/svg')
 
 frames.each do |frame|
     interval_start = frame[0]
     interval_end = frame[1]
 
     # Query to figure out which slide we're on - based on interval start since slide can change if mouse stationary
-    slide = @img.xpath("//xmlns:image[@in <= #{interval_start}]", 'xmlns' => 'http://www.w3.org/2000/svg').last
+    slide = @img.xpath("(//xmlns:image[@in <= #{interval_start}])[last()]", 'xmlns' => 'http://www.w3.org/2000/svg')
+
+    # Query viewBox parameter of slide
+    view_box = @pan.xpath("(//event[@timestamp <= #{interval_start}]/viewBox/text())[last()]")
 
     width = slide.attr('width').to_s
     height = slide.attr('height').to_s
@@ -51,7 +56,7 @@ frames.each do |frame|
     builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
         #xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
 
-        xml.svg(width: width, height: height, x: x, y: y, version: '1.1', viewBox: '0 0 1600 900', 'xmlns' => 'http://www.w3.org/2000/svg') do
+        xml.svg(width: width, height: height, x: x, y: y, version: '1.1', viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg') do
             xml.circle(cx: cursor_x, cy: cursor_y, r: '10', fill: 'red') unless cursor_x.negative? || cursor_y.negative?
         end
     end
@@ -76,3 +81,6 @@ end
 File.open('timestamps/cursor_timestamps', 'a') do |file|
     file.puts "file ../cursor/cursor#{frame_number - 1}.svgz"
 end
+
+finish = Time.now
+puts finish - start

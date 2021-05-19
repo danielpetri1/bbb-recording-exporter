@@ -5,17 +5,24 @@ require 'nokogiri'
 require 'base64'
 require 'zlib'
 
+# Track how long the code is taking
+start = Time.now
+
 # Opens shapes.svg
 @doc = Nokogiri::XML(File.open('shapes.svg'))
+
+# Opens panzooms.xml
+@pan = Nokogiri::XML(File.open('panzooms.xml'))
 
 # Get intervals to display the frames
 ins = @doc.xpath('//@in')
 outs = @doc.xpath('//@out')
 timestamps = @doc.xpath('//@timestamp')
-undos = @doc.xpath('//@undo') 
+undos = @doc.xpath('//@undo')
 images = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg')
+zooms = @pan.xpath('//@timestamp')
 
-intervals = (ins + outs + timestamps + undos).to_a.map(&:to_s).map(&:to_f).uniq.sort
+intervals = (ins + outs + timestamps + undos + zooms).to_a.map(&:to_s).map(&:to_f).uniq.sort
 
 # Image paths need to follow the URI Data Scheme (for slides and polls)
 images.each do |image|
@@ -47,8 +54,11 @@ frames.each do |frame|
   interval_start = frame[0]
   interval_end = frame[1]
 
-  # Figure out which slide we're currently on
+  # Query slide we're currently on
   slide = @doc.xpath("//xmlns:image[@in <= #{interval_start} and #{interval_end} <= @out]", 'xmlns' => 'http://www.w3.org/2000/svg')
+
+  # Query current viewbox parameter
+  view_box = @pan.xpath("(//event[@timestamp <= #{interval_start}]/viewBox/text())[last()]")
 
   # Get slide information
   slide_id = slide.attr('id').to_s
@@ -57,8 +67,6 @@ frames.each do |frame|
   height = slide.attr('height').to_s
   x = slide.attr('x').to_s
   y = slide.attr('y').to_s
-
-  view_box = '0 0 1600 900'
 
   draw = @doc.xpath(
     "//xmlns:g[@class=\"canvas\" and @image=\"#{slide_id}\"]/xmlns:g[@timestamp < \"#{interval_end}\" and (@undo = \"-1\" or @undo >= \"#{interval_end}\")]", 'xmlns' => 'http://www.w3.org/2000/svg'
@@ -99,10 +107,15 @@ frames.each do |frame|
   end
 
   frame_number += 1
-  puts frame_number
+  #puts frame_number
 end
 
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
 File.open('timestamps/whiteboard_timestamps', 'a') do |file|
   file.puts "file ../frames/frame#{frame_number - 1}.svgz"
 end
+
+# Benchmark
+finish = Time.now
+
+puts finish - start

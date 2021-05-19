@@ -17,15 +17,13 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 ✅  Polls <br  />
 ✅  Cursor <br  />
 ✅  Zooms <br  />
-✅  Saving annotated slides as PNG so they can be merged into a new PDF<br  />
+✅  Text <br  />
 
 ## What's coming?
 
 🔜 Integration into Greenlight's UI<br  />
-
 🔜 Conversion of annotated slides into PDF using Cairo<br  />
-
-🔜 Support of further interactive elements such as the chat and text<br  /> 
+🔜 Support of further interactive elements such as the chat <br  /> 
 
 
 ## Usage

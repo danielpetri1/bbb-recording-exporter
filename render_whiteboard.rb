@@ -35,6 +35,33 @@ images.each do |image|
   image.set_attribute('style', 'visibility:visible')
 end
 
+# Convert XHTML to SVG so that text can be shown
+xhtml = @doc.xpath('//xmlns:g/xmlns:switch/xmlns:foreignObject')
+
+xhtml.each do |foreign_object|
+  # Get and set style of corresponding group container
+  g = foreign_object.parent.parent
+  g_style = g.attr('style')
+  g.set_attribute('style', "#{g_style};fill:currentcolor")
+
+  # The text is contained in the <p> tag, which may contain </br>
+  text = foreign_object.children.children
+
+  # Obtain X and Y coordinates of the text
+  x = foreign_object.attr('x').to_s
+  y = foreign_object.attr('y').to_s
+
+  text.each_with_index do |line, index|
+    next if line.to_s == '<br/>'
+
+    # Add SVG text as a new child to the group
+    g.add_child("<text x=\"#{x}\" y=\"#{y}\" dy=\"#{index + 0.9}em\">#{line}</text>")
+  end
+
+  # Remove the <switch> tag
+  foreign_object.parent.remove
+end
+
 # Creates new file to hold the timestamps of the whiteboard
 File.open('timestamps/whiteboard_timestamps', 'w') {}
 
@@ -93,6 +120,17 @@ frames.each do |frame|
     end
   end
 
+  # Saves frame as SVG file (for debugging purposes)
+  File.open("frames/frame#{frame_number}.svg", 'w') do |file|
+    file.write(builder.to_xml)
+  end
+
+  # Writes its duration down
+  # File.open('whiteboard_timestamps', 'a') do |file|
+  # file.puts "file frames/frame#{frame_number}.svg"
+  # file.puts "duration #{(interval_end - interval_start).round(1)}"
+  # end
+
   # Saves frame as SVGZ file
   File.open("frames/frame#{frame_number}.svgz", 'w') do |file|
     svgz = Zlib::GzipWriter.new(file)
@@ -107,7 +145,7 @@ frames.each do |frame|
   end
 
   frame_number += 1
-  #puts frame_number
+  puts frame_number
 end
 
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)

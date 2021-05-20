@@ -44,19 +44,22 @@ xhtml.each do |foreign_object|
   g_style = g.attr('style')
   g.set_attribute('style', "#{g_style};fill:currentcolor")
 
-  # The text is contained in the <p> tag, which may contain </br>
   text = foreign_object.children.children
 
   # Obtain X and Y coordinates of the text
   x = foreign_object.attr('x').to_s
   y = foreign_object.attr('y').to_s
 
-  text.each_with_index do |line, index|
-    next if line.to_s == '<br/>'
+  svg = "<text x=\"#{x}\" y=\"#{y}\" xml:space=\"preserve\">"
 
-    # Add SVG text as a new child to the group
-    g.add_child("<text x=\"#{x}\" y=\"#{y}\" dy=\"#{index + 0.9}em\">#{line}</text>")
+  # Add line breaks as <tspan> elements
+  text.each do |line|
+    svg += "<tspan x=\"#{x}\" dy=\"0.9em\">#{line}</tspan>"
   end
+
+  svg += "</text>"
+
+  g.add_child(svg)
 
   # Remove the <switch> tag
   foreign_object.parent.remove

@@ -50,11 +50,25 @@ xhtml.each do |foreign_object|
   x = foreign_object.attr('x').to_s
   y = foreign_object.attr('y').to_s
 
+  # Preserve the whitespace (seems to be ignored by FFmpeg)
   svg = "<text x=\"#{x}\" y=\"#{y}\" xml:space=\"preserve\">"
 
   # Add line breaks as <tspan> elements
   text.each do |line|
-    svg += "<tspan x=\"#{x}\" dy=\"0.9em\">#{line}</tspan>"
+    if line.to_s == "<br/>"
+
+      svg += "<tspan x=\"#{x}\" dy=\"0.9em\"><br/></tspan>"
+
+    else
+
+      # Make a new line every 40 characters (arbitrary value, SVG does not support auto wrap)
+      line_breaks = line.to_s.chars.each_slice(40).map(&:join)
+
+      line_breaks.each do |row|
+        svg += "<tspan x=\"#{x}\" dy=\"0.9em\">#{row}</tspan>"
+      end
+
+    end
   end
 
   svg += "</text>"

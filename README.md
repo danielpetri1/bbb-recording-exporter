@@ -5,7 +5,7 @@
 
 ⚠️ **Still a work in progress!** ⚠️<br  />
 
-A client- and (future) server side script to enable users to download a BigBlueButton 2.3-dev recording as a single video file.
+A client- and server side script to enable users to download a BigBlueButton 2.3-dev recording as a single video file.
 
 This is still a work in progress that downloads Big Blue Button's `shapes.svg` file to locally recreate the recording played in the browser as a `.mp4` file.
 
@@ -42,7 +42,7 @@ Render the presentation, whiteboard, mouse pointer and chat with
     ruby render_cursor.rb
     ruby render_chat.rb
 
-To then render the video, open the render_video.rb file and choose the appropriate FFmpeg command. Make sure to change the webcam and deskshare file extension if necessary.
+To then render the video, open the render_video.rb file and choose the appropriate FFmpeg command. Check whether the file extensions are correct once again.
 
     render_video.rb
 

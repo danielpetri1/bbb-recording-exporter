@@ -5,54 +5,56 @@
 
 ⚠️ **Still a work in progress!** ⚠️<br  />
 
-A client- and (future) server side script to enable users to download a BigBlueButton recording as a single video file.
+A client- and (future) server side script to enable users to download a BigBlueButton 2.3-dev recording as a single video file.
 
-This is still a work in progress that downloads Big Blue Button's `shapes.svg` file to locally recreate the recording played in the browser as a `webm` or `.mp4` file.
+This is still a work in progress that downloads Big Blue Button's `shapes.svg` file to locally recreate the recording played in the browser as a `.mp4` file.
 
 ## What's supported?
 
-✅ Export of BigBlueButton presentations containing audio, slides and whiteboard annotations<br  />
-✅ Option to render the webcams and screen sharings (deskshare) in addition to the presentation<br  />
-✅ Saving annotated slides as PNG so they can be merged into a new PDF<br  /> 
+✅  Whiteboard slides with annotations <br  />
+✅  Webcams <br  />
+✅  Screen shares <br  />
+✅  Polls <br  />
+✅  Cursor <br  />
+✅  Zooms <br  />
+✅  Text <br  />
+✅  Chat <br  />
+
+![BigBlueButton recording exporter](/slides/export_example.png)
 
 ## What's coming?
 
-🔜 Integration into Greenlight's UI<br  />
-
-🔜 Conversion of annotated slides into PDF using Cairo<br  />
-
-🔜 Support of further interactive elements such as the cursor, chat, and polls<br  /> 
-
-🔜 Speed improvements<br  />
-
+🔜 Integration into BBB and Greenlight's UI<br  />
 
 ## Usage
-In your terminal, type
+In the `download_client.rb` file, change the `path` variable to reflect your BBB recording link like so:
+    
+    path = "https://hostname/presentation/meetingID/#{file}"
 
-    ruby download_client.rb "URL_OF_YOUR_BBB-RECORDING"
+Make sure to adapt the array beginning with `shapes.svg` to reflect your recording's data, changing file extensions and removing the deskshare if necessary.
+Run with
 
-Create the presentation with
+    ruby download_client.rb
 
-    ruby render_slides.rb
-
-and the whiteboard with
+Render the presentation, whiteboard, mouse pointer and chat with
 
     ruby render_whiteboard.rb
+    ruby render_cursor.rb
+    ruby render_chat.rb
 
-To then render the video, run
+To then render the video, open the render_video.rb file and choose the appropriate FFmpeg command. Make sure to change the webcam and deskshare file extension if necessary.
 
-    ruby render_video.rb
+    render_video.rb
 
-If you want to get the slides with the whiteboard annotations
+If you want to get the slides with the whiteboard annotations (currently still requires librsvg)
 
     ruby export_annotated_slides.rb
 
 and open the 'slides' folder.
 
 ### Requirements
-librsvg<br />
 ffmpeg  version 4.4, compiled with --enable-librsvg <br />
-Ruby with Nokogiri, open-uri, cgi, and fileutils<br />
+Ruby with Nokogiri<br />
 
 Only tested and developed on macOS Big Sur so far for BBB 2.3 recordings. <br />
 

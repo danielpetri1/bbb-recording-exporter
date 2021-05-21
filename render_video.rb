@@ -1,13 +1,21 @@
-# frozen_string_literal: true
+# Create white solid background (limits recordings to 12 hours)
+# ffmpeg -f lavfi -i color=c=white:s=1920x1080 -loop 1 -t 43200 -video_track_timescale 90k bg.mp4
 
-# Render presentation
-system("ffmpeg -f concat -i presentation_timestamps -c:v libvpx-vp9 -b:v 2500k -pix_fmt yuva420p -metadata:s:v:0 alpha_mode=\"1\" -vsync vfr -auto-alt-ref 0 -y -filter_complex 'scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white' presentation.webm")
+# Render slides + whiteboard + mouse + webcams + chat
+ffmpeg -f lavfi -i color=c=white:s=1920x1080 \
+ -f concat -safe 0 -i timestamps/whiteboard_timestamps \
+ -f concat -safe 0 -i timestamps/cursor_timestamps \
+ -f concat -safe 0 -i timestamps/chat_timestamps \
+ -i video/webcams.webm -filter_complex \
+'[1]scale=w=1600:h=1080:force_original_aspect_ratio=1,pad=1600:1080:-1:-1:white,fifo[a];[2]scale=w=1600:h=1080:force_original_aspect_ratio=1,pad=1600:1080:-1:-1:white,fifo[b];[4]scale=w=320:h=240[c];[0][a]overlay=x=320[tmp];[tmp][b]overlay=x=320[tmp2];[tmp2][3]overlay=y=240[tmp3];[tmp3][c]overlay' \
+-c:a aac -shortest -y merged.mp4
 
-# Render whiteboard
-system("ffmpeg -f concat -i whiteboard_timestamps -c:v libvpx-vp9 -b:v 2500k -pix_fmt yuva420p -metadata:s:v:0 alpha_mode=\"1\" -vsync vfr -auto-alt-ref 0 -y -filter_complex 'scale=w=1280:h=720:force_original_aspect_ratio=1,pad=1280:720:-1:-1:white' whiteboard.webm")
-
-# Presentation + Annotations + Deskshare + Webcams (.webm)
-system("ffmpeg -i deskshare/deskshare.mp4 -c:v libvpx-vp9 -i presentation.webm -c:v libvpx-vp9 -i whiteboard.webm -i video/webcams.mp4 -filter_complex '[3]scale=w=iw/4:h=ih/4[cam];[0][1]overlay[tmp];[tmp][2]overlay[out];[out][cam]overlay=x=(main_w-overlay_w)' -b:v 2500k -b:a 128k -shortest -y presentation-deskshare-webcam.webm")
-
-# Presentation + Annotations + Deskshare + Webcams (.mp4) - faster, patent encumbered
-# system("ffmpeg -i deskshare/deskshare.mp4 -c:v libvpx-vp9 -i presentation.webm -c:v libvpx-vp9 -i whiteboard.webm -i video/webcams.mp4 -filter_complex '[3]scale=w=iw/4:h=ih/4[cam];[0][1]overlay[tmp];[tmp][2]overlay[out];[out][cam]overlay=x=(main_w-overlay_w)' -shortest -y presentation-deskshare-webcam.mp4")
+# Render slides + whiteboard + mouse + webcams + deskshare
+ffmpeg -f lavfi -i color=c=white:s=1920x1080 \
+ -f concat -safe 0 -i timestamps/whiteboard_timestamps \
+ -f concat -safe 0 -i timestamps/cursor_timestamps \
+ -f concat -safe 0 -i timestamps/chat_timestamps \
+ -i video/webcams.webm \
+ -i deskshare/deskshare.webm -filter_complex \
+'[1]scale=w=1600:h=1080:force_original_aspect_ratio=1,fifo[a];[2]scale=w=1600:h=1080:force_original_aspect_ratio=1,fifo[b];[4]scale=w=320:h=240[c];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1,pad=1600:1080:-1:-1:white,fifo[d];[0][d]overlay=x=320[tmp];[tmp][a]overlay=x=320[tmp2];[tmp2][b]overlay=x=320[tmp3];[tmp3][3]overlay[tmp4];[tmp4][c]overlay' \
+-c:a aac -shortest -y merged.mp4

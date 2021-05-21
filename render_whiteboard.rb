@@ -138,13 +138,13 @@ frames.each do |frame|
   end
 
   # Saves frame as SVG file (for debugging purposes)
-  File.open("frames/frame#{frame_number}.svg", 'w') do |file|
-    file.write(builder.to_xml)
-  end
+  # File.open("frames/frame#{frame_number}.svg", 'w') do |file|
+  # file.write(builder.to_xml)
+  # end
 
   # Writes its duration down
-  # File.open('whiteboard_timestamps', 'a') do |file|
-  # file.puts "file frames/frame#{frame_number}.svg"
+  # File.open('timestamps/whiteboard_timestamps', 'a') do |file|
+  # file.puts "file ../frames/frame#{frame_number}.svg"
   # file.puts "duration #{(interval_end - interval_start).round(1)}"
   # end
 
@@ -162,7 +162,7 @@ frames.each do |frame|
   end
 
   frame_number += 1
-  puts frame_number
+  # puts frame_number
 end
 
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)

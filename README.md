@@ -18,33 +18,31 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 ✅  Cursor <br  />
 ✅  Zooms <br  />
 ✅  Text <br  />
+✅  Chat <br  />
 
 ## What's coming?
 
-🔜 Integration into Greenlight's UI<br  />
-🔜 Conversion of annotated slides into PDF using Cairo<br  />
-🔜 Support of further interactive elements such as the chat <br  /> 
+🔜 Integration into BBB and Greenlight's UI<br  />
 
+![BigBlueButton recording exporter](/slides/export_example.png)
 
 ## Usage
 In the `download_client.rb` file, change the `path` variable to reflect your BBB recording link like so:
     
     path = "https://hostname/presentation/meetingID/#{file}"
 
-Make sure to adapt the array beginning with `shapes.svg` to reflect your recording, changing file extensions and removing the deskshare if necessary.
+Make sure to adapt the array beginning with `shapes.svg` to reflect your recording's data, changing file extensions and removing the deskshare if necessary.
 Run with
 
     ruby download_client.rb
 
-Render the presentation and the whiteboard with
+Render the presentation, whiteboard, mouse pointer and chat with
 
     ruby render_whiteboard.rb
+    ruby render_cursor.rb
+    ruby render_chat.rb
 
-and the whiteboard with
-
-    ruby render_whiteboard.rb
-
-To then render the video, run the desired ffmpeg command in
+To then render the video, open the render_video.rb file and choose the appropriate FFmpeg command. Make sure to change the webcam and deskshare file extension if necessary.
 
     render_video.rb
 
@@ -56,7 +54,7 @@ and open the 'slides' folder.
 
 ### Requirements
 ffmpeg  version 4.4, compiled with --enable-librsvg <br />
-Ruby with Nokogiri, open-uri, cgi, and fileutils<br />
+Ruby with Nokogiri<br />
 
 Only tested and developed on macOS Big Sur so far for BBB 2.3 recordings. <br />
 

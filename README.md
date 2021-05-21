@@ -20,11 +20,11 @@ This is still a work in progress that downloads Big Blue Button's `shapes.svg` f
 ✅  Text <br  />
 ✅  Chat <br  />
 
+![BigBlueButton recording exporter](/slides/export_example.png)
+
 ## What's coming?
 
 🔜 Integration into BBB and Greenlight's UI<br  />
-
-![BigBlueButton recording exporter](/slides/export_example.png)
 
 ## Usage
 In the `download_client.rb` file, change the `path` variable to reflect your BBB recording link like so:

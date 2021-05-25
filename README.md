@@ -46,12 +46,6 @@ To then render the video, open the render_video.rb file and choose the appropria
 
     render_video.rb
 
-If you want to get the slides with the whiteboard annotations (currently still requires librsvg)
-
-    ruby export_annotated_slides.rb
-
-and open the 'slides' folder.
-
 ### Requirements
 ffmpeg  version 4.4, compiled with --enable-librsvg <br />
 Ruby with Nokogiri<br />
@@ -60,8 +54,8 @@ Only tested and developed on macOS Big Sur so far for BBB 2.3 recordings. <br />
 
 ## How it works
 
-The script creates an SVG frame for every timestep in the recording and uses [FFmpeg's Concatenate](https://trac.ffmpeg.org/wiki/Slideshow) format to render the animation as a slideshow. This requires FFmpeg 
-to have been compiled with the `librsvg` option enabled.
+The script creates a SVG frame for every timestep in the recording and uses [FFmpeg's Concatenate](https://trac.ffmpeg.org/wiki/Slideshow) format to render the animation as a slideshow. This requires FFmpeg 
+to have been compiled with the `librsvg` option enabled, which is the case on BigBlueButton 2.3.
 
 In contrast to other approaches, this script is **not** dependent on headless browsers, screen recorders, and open source video editors... just plain Ruby to generate well-formed SVGs, hoping to get faster
 render times and smaller file sizes.

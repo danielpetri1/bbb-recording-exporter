@@ -36,7 +36,7 @@ images.each do |image|
 end
 
 # Convert XHTML to SVG so that text can be shown
-xhtml = @doc.xpath('//xmlns:g/xmlns:switch/xmlns:foreignObject')
+xhtml = @doc.xpath('//xmlns:g/xmlns:switch/xmlns:foreignObject', 'xmlns' => 'http://www.w3.org/2000/svg')
 
 xhtml.each do |foreign_object|
   # Get and set style of corresponding group container
@@ -120,9 +120,9 @@ frames.each do |frame|
   builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
     xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
 
-    xml.svg(width: width, height: height, x: x, y: y, version: '1.1', viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
+    xml.svg(width: "1600", height: "1080", x: x, y: y, version: '1.1', viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
       # Display background image
-      xml.image('xlink:href': slide.attr('href'), width: width, height: height, x: x, y: y, style: slide.attr('style'))
+      xml.image('xlink:href': slide.attr('href'), width: width, height: height, preserveAspectRatio: "xMidYMid slice", x: x, y: y, style: slide.attr('style'))
 
       # Add annotations
       draw.each do |shape|
@@ -139,7 +139,7 @@ frames.each do |frame|
 
   # Saves frame as SVG file (for debugging purposes)
   # File.open("frames/frame#{frame_number}.svg", 'w') do |file|
-  # file.write(builder.to_xml)
+    # file.write(builder.to_xml)
   # end
 
   # Writes its duration down

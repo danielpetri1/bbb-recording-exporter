@@ -1,18 +1,57 @@
-#!/usr/bin/env ruby
+#!/usr/bin/ruby
 # frozen_string_literal: true
 
+#
+# BigBlueButton open source conferencing system - http://www.bigbluebutton.org/
+#
+# Copyright (c) 2012 BigBlueButton Inc. and by respective authors (see below).
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU Lesser General Public License as published by the Free
+# Software Foundation; either version 3.0 of the License, or (at your option)
+# any later version.
+#
+# BigBlueButton is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Lesser General Public License along
+# with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
+#
+
+require "trollop"
 require 'nokogiri'
 require 'base64'
 require 'zlib'
+require File.expand_path('../../../lib/recordandplayback', __FILE__)
+
+opts = Trollop.options do
+  opt :meeting_id, "Meeting id to archive", type: String
+  opt :format, "Playback format name", type: String
+end
+
+meeting_id = opts[:meeting_id]
+
+logger = Logger.new("/var/log/bigbluebutton/post_publish.log", 'weekly')
+logger.level = Logger::INFO
+BigBlueButton.logger = logger
+
+published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
+
+#
+# Main code
+#
 
 # Track how long the code is taking
 start = Time.now
+BigBlueButton.logger.info("Starting render_whiteboard.rb for [#{meeting_id}]")
 
 # Opens shapes.svg
-@doc = Nokogiri::XML(File.open('shapes.svg'))
+@doc = Nokogiri::XML(File.open("#{published_files}/shapes.svg"))
 
 # Opens panzooms.xml
-@pan = Nokogiri::XML(File.open('panzooms.xml'))
+@pan = Nokogiri::XML(File.open("#{published_files}/panzooms.xml"))
 
 # Get intervals to display the frames
 ins = @doc.xpath('//@in')
@@ -26,7 +65,7 @@ intervals = (ins + outs + timestamps + undos + zooms).to_a.map(&:to_s).map(&:to_
 
 # Image paths need to follow the URI Data Scheme (for slides and polls)
 images.each do |image|
-  path = image.attr('xlink:href')
+  path = "#{published_files}/#{image.attr('xlink:href')}"
 
   # Open the image
   data = File.open(path).read
@@ -79,8 +118,11 @@ xhtml.each do |foreign_object|
   foreign_object.parent.remove
 end
 
+# Creates directory for the temporary assets
+Dir.mkdir("#{published_files}/frames") unless File.exist?("#{published_files}/frames")
+
 # Creates new file to hold the timestamps of the whiteboard
-File.open('timestamps/whiteboard_timestamps', 'w') {}
+File.open("#{published_files}/timestamps/whiteboard_timestamps", 'w') {}
 
 # Intervals with a value of -1 do not correspond to a timestamp
 intervals = intervals.drop(1) if intervals.first == -1
@@ -138,25 +180,25 @@ frames.each do |frame|
   end
 
   # Saves frame as SVG file (for debugging purposes)
-  # File.open("frames/frame#{frame_number}.svg", 'w') do |file|
-    # file.write(builder.to_xml)
+  # File.open("#{published_files}/frames/frame#{frame_number}.svg", 'w') do |file|
+  # file.write(builder.to_xml)
   # end
 
   # Writes its duration down
-  # File.open('timestamps/whiteboard_timestamps', 'a') do |file|
-  # file.puts "file ../frames/frame#{frame_number}.svg"
+  # File.open("#{published_files}/timestamps/whiteboard_timestamps", 'a') do |file|
+  # file.puts "file #{published_files}/frames/frame#{frame_number}.svg"
   # file.puts "duration #{(interval_end - interval_start).round(1)}"
   # end
 
   # Saves frame as SVGZ file
-  File.open("frames/frame#{frame_number}.svgz", 'w') do |file|
+  File.open("#{published_files}/frames/frame#{frame_number}.svgz", 'w') do |file|
     svgz = Zlib::GzipWriter.new(file)
     svgz.write(builder.to_xml)
     svgz.close
   end
 
   # Writes its duration down
-  File.open('timestamps/whiteboard_timestamps', 'a') do |file|
+  File.open("#{published_files}/timestamps/whiteboard_timestamps", 'a') do |file|
     file.puts "file ../frames/frame#{frame_number}.svgz"
     file.puts "duration #{(interval_end - interval_start).round(1)}"
   end
@@ -166,11 +208,56 @@ frames.each do |frame|
 end
 
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
-File.open('timestamps/whiteboard_timestamps', 'a') do |file|
-  file.puts "file ../frames/frame#{frame_number - 1}.svgz"
+File.open("#{published_files}/timestamps/whiteboard_timestamps", 'a') do |file|
+  file.puts "file #{published_files}/frames/frame#{frame_number - 1}.svgz"
 end
 
 # Benchmark
 finish = Time.now
 
-puts finish - start
+BigBlueButton.logger.info("Finished render_whiteboard.rb for [#{meeting_id}]. Total: #{finish - start}")
+
+start = Time.now
+
+# Determine file extensions used
+extension = if File.file?("#{published_files}/video/webcams.mp4")
+  "mp4"
+else
+  "webm"
+            end
+
+# Determine if video had screensharing
+deskshare = File.file?("#{published_files}/deskshare/deskshare#{extension}")
+
+if deskshare
+  render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
+ "-f concat -safe 0 -i #{published_files}/timestamps/whiteboard_timestamps " \
+ "-f concat -safe 0 -i #{published_files}/timestamps/cursor_timestamps " \
+ "-f concat -safe 0 -i #{published_files}/timestamps/chat_timestamps " \
+ "-i #{published_files}/video/webcams.#{extension} " \
+ "-i #{published_files}/deskshare/deskshare.#{extension} -filter_complex " \
+"'[4]scale=w=320:h=240[webcams];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1[deskshare];[0][deskshare]overlay=x=320[screenshare];[screenshare][1]overlay=x=320[whiteboard];[whiteboard][2]overlay=x=320[cursor];[cursor][3]overlay[chat];[chat][webcams]overlay'" \
+"-c:a aac -shortest -y #{published_files}/meeting.mp4"
+else
+  render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
+"-f concat -safe 0 -i #{published_files}/timestamps/whiteboard_timestamps " \
+ "-f concat -safe 0 -i #{published_files}/timestamps/cursor_timestamps " \
+ "-f concat -safe 0 -i #{published_files}/timestamps/chat_timestamps " \
+ "-i #{published_files}/video/webcams.#{extension} -filter_complex " \
+ "'[4]scale=w=320:h=240[webcams];[0][1]overlay=x=320[slides];[slides][2]overlay=x=320[cursor];[cursor][3]overlay=y=240[chat];[chat][webcams]overlay' " \
+ "-c:a aac -shortest -y #{published_files}/meeting.mp4"
+end
+
+BigBlueButton.logger.info("Beginning to render video for [#{meeting_id}]")
+system(render)
+
+finish = Time.now
+BigBlueButton.logger.info("Exported recording available at #{published_files}/meeting.mp4 . Render time: #{finish - start}")
+
+# Delete the contents of the scratch directories (race conditions)
+# FileUtils.rm_rf("#{published_files}/chats")
+# FileUtils.rm_rf("#{published_files}/cursor")
+# FileUtils.rm_rf("#{published_files}/frames")
+# FileUtils.rm_rf("#{published_files}/timestamps")
+
+exit 0

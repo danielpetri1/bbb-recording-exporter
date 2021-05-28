@@ -1,4 +1,5 @@
 
+
   
 
   
@@ -52,10 +53,9 @@ A server-side script to export a BigBlueButton 2.3-dev recording as a single vid
 ✅ Chat <br  />
 
   
+## [Demonstration](https://drive.google.com/file/d/1H5004sX6OLdZBrs6gS-nWsm2HTyuRhUy/view)
 
-  
-
-![BigBlueButton recording exporter](/slides/export_example.png)
+![BigBlueButton Recording Exporter - render into mp4 file](https://i.imgur.com/CjSFtzi.png "BBB video meeting exporter")
 
   
   
@@ -68,7 +68,7 @@ A server-side script to export a BigBlueButton 2.3-dev recording as a single vid
 
   
 
-## Usage - Server side
+## Usage
 Place the files `render_chat.rb`, `render_cursor.rb`, and `render_whiteboard.rb` in `/usr/local/bigbluebutton/core/scripts/post_publish` with executable rights.
 
 BBB sessions will then automatically be exported as a `meeting.mp4` file, which can be accessed and downloaded at https://`your.bbb.hostname`/presentation/`meeting-id`/meeting.mp4

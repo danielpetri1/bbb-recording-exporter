@@ -1,23 +1,67 @@
-#!/usr/bin/env ruby
+#!/usr/bin/ruby
 # frozen_string_literal: true
 
+#
+# BigBlueButton open source conferencing system - http://www.bigbluebutton.org/
+#
+# Copyright (c) 2012 BigBlueButton Inc. and by respective authors (see below).
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU Lesser General Public License as published by the Free
+# Software Foundation; either version 3.0 of the License, or (at your option)
+# any later version.
+#
+# BigBlueButton is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Lesser General Public License along
+# with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
+#
+
+require "trollop"
 require 'nokogiri'
 require 'zlib'
+require File.expand_path('../../../lib/recordandplayback', __FILE__)
 
+opts = Trollop.options do
+  opt :meeting_id, "Meeting id to archive", type: String
+  opt :format, "Playback format name", type: String
+end
+
+meeting_id = opts[:meeting_id]
+
+logger = Logger.new("/var/log/bigbluebutton/post_publish.log", 'weekly')
+logger.level = Logger::INFO
+BigBlueButton.logger = logger
+
+published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
+
+#
+# Main code
+#
+
+# Track how long the code is taking
 start = Time.now
 
+BigBlueButton.logger.info("Starting render_cursor.rb for [#{meeting_id}]")
+
 # Opens cursor.xml and shapes.svg
-@doc = Nokogiri::XML(File.open('cursor.xml'))
-@img = Nokogiri::XML(File.open('shapes.svg'))
-@pan = Nokogiri::XML(File.open('panzooms.xml'))
+@doc = Nokogiri::XML(File.open("#{published_files}/cursor.xml"))
+@img = Nokogiri::XML(File.open("#{published_files}/shapes.svg"))
+@pan = Nokogiri::XML(File.open("#{published_files}/panzooms.xml"))
 
 # Get intervals to display the frames
 timestamps = @doc.xpath('//@timestamp')
 
 intervals = timestamps.to_a.map(&:to_s).map(&:to_f).uniq
 
+# Creates directory for the temporary assets
+Dir.mkdir("#{published_files}/cursor") unless File.exist?("#{published_files}/cursor")
+
 # Creates new file to hold the timestamps of the cursor's position
-File.open('timestamps/cursor_timestamps', 'w') {}
+File.open("#{published_files}/timestamps/cursor_timestamps", 'w') {}
 
 # Obtain interval range that each frame will be shown for
 frame_number = 0
@@ -62,15 +106,15 @@ frames.each do |frame|
     end
 
     # Saves frame as SVGZ file
-    File.open("cursor/cursor#{frame_number}.svgz", 'w') do |file|
+    File.open("#{published_files}/cursor/cursor#{frame_number}.svgz", 'w') do |file|
         svgz = Zlib::GzipWriter.new(file)
         svgz.write(builder.to_xml)
         svgz.close
     end
 
     # Writes its duration down
-    File.open('timestamps/cursor_timestamps', 'a') do |file|
-        file.puts "file ../cursor/cursor#{frame_number}.svgz"
+    File.open("#{published_files}/timestamps/cursor_timestamps", 'a') do |file|
+        file.puts "file #{published_files}/cursor/cursor#{frame_number}.svgz"
         file.puts "duration #{(interval_end - interval_start).round(1)}"
     end
 
@@ -78,9 +122,11 @@ frames.each do |frame|
 end
 
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
-File.open('timestamps/cursor_timestamps', 'a') do |file|
-    file.puts "file ../cursor/cursor#{frame_number - 1}.svgz"
+File.open("#{published_files}/timestamps/cursor_timestamps", 'a') do |file|
+    file.puts "file #{published_files}/cursor/cursor#{frame_number - 1}.svgz"
 end
 
 finish = Time.now
-puts finish - start
+BigBlueButton.logger.info("Finished render_cursor.rb for [#{meeting_id}]. Total: #{finish - start}")
+
+exit 0

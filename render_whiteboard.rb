@@ -80,17 +80,16 @@ xhtml = @doc.xpath('//xmlns:g/xmlns:switch/xmlns:foreignObject', 'xmlns' => 'htt
 xhtml.each do |foreign_object|
   # Get and set style of corresponding group container
   g = foreign_object.parent.parent
-  g_style = g.attr('style')
-  g.set_attribute('style', "#{g_style};fill:currentcolor")
 
   text = foreign_object.children.children
 
   # Obtain X and Y coordinates of the text
   x = foreign_object.attr('x').to_s
   y = foreign_object.attr('y').to_s
+  text_color = g.attr('style').split(';').first.split(':')[1]
 
   # Preserve the whitespace (seems to be ignored by FFmpeg)
-  svg = "<text x=\"#{x}\" y=\"#{y}\" xml:space=\"preserve\">"
+  svg = "<text x=\"#{x}\" y=\"#{y}\" xml:space=\"preserve\" fill=\"#{text_color}\">"
 
   # Add line breaks as <tspan> elements
   text.each do |line|

@@ -1,22 +1,8 @@
-
-
-  
-
-  
-
-  
-
 # BigBlueButton Exporter
-
-  
 
 ⚠️ **Still a work in progress!** ⚠️<br  />
 
-  
-
-A server-side script to export a BigBlueButton 2.3-dev recording as a single video file.
-
-  
+Client-side version of the scripts to enable users to download a BigBlueButton 2.3-dev recording as a single video file.
 
 ## What's supported?
 
@@ -24,63 +10,53 @@ A server-side script to export a BigBlueButton 2.3-dev recording as a single vid
 
 ✅ Whiteboard slides with annotations <br  />
 
-  
-
 ✅ Webcams <br  />
-
-  
 
 ✅ Screen shares <br  />
 
-  
-
 ✅ Polls <br  />
-
-  
 
 ✅ Cursor <br  />
 
-  
-
 ✅ Zooms <br  />
-
-  
 
 ✅ Text <br  />
 
-  
-
 ✅ Chat <br  />
 
-  
-## [Demonstration](https://drive.google.com/file/d/1H5004sX6OLdZBrs6gS-nWsm2HTyuRhUy/view)
+![BigBlueButton recording exporter](/slides/export_example.png)
 
-![BigBlueButton Recording Exporter - render into mp4 file](https://i.imgur.com/CjSFtzi.png "BBB video meeting exporter")
+## Usage - Client Side
 
-  
-  
+In the `download_client.rb` file, change the `path` variable to reflect your BBB recording link like so:
 
-## What's coming?
-
-🔜 Integration into BBB and Greenlight's UI<br  />
-
-🔜 Faster, less resource-intensive exports<br  />
+path = "https://hostname/presentation/meetingID/#{file}"
 
   
+Make sure to adapt the array beginning with `shapes.svg` to reflect your recording's data, changing file extensions and removing the deskshare if necessary.
 
-## Usage
-Place the files `render_chat.rb`, `render_cursor.rb`, and `render_whiteboard.rb` in `/usr/local/bigbluebutton/core/scripts/post_publish` with executable rights.
+Run with
 
-BBB sessions will then automatically be exported as a `meeting.mp4` file, which can be accessed and downloaded at https://`your.bbb.hostname`/presentation/`meeting-id`/meeting.mp4
+    ruby download_client.rb
 
-The meeting's ID is the alphanumeric string following the 2.3 in the recording's URL.
+  
 
-Existing recordings can be rebuilt to run the exporting scripts automatically again.
- 
-## Requirements
-Access to a functioning BBB 2.3 server. <br  />
+Render the presentation, whiteboard, mouse pointer and chat with
 
-## Disclaimer
-As this project is still a work in progress, long BBB sessions or meetings that contain a large amount of chat messages / whiteboard annotations may take up a lot of hard disk space and be slow to render. The contents of the created scratch folders are **not** automatically deleted.
+    ruby render_whiteboard.rb
+    
+    ruby render_cursor.rb
+    
+    ruby render_chat.rb
 
-A license may be needed for the generated .mp4 files.
+  
+
+To then render the video, open the render_video.rb file and choose the appropriate FFmpeg command. Check whether the file extensions are correct once again.
+
+Choose an appropriate ffmpeg command in `render_video` and run it in the terminal. After rendering is complete, you can delete the contents of the created folders to save space.
+
+### Requirements
+
+ffmpeg version 4.4, compiled with --enable-librsvg <br  />
+
+Ruby with Nokogiri<br  />

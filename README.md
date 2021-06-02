@@ -66,7 +66,7 @@ A server-side script to export a BigBlueButton 2.3-dev recording as a single vid
 
 🔜 Faster, less resource-intensive exports<br  />
 
-  
+🔜  A detailed documentation in the form of my Bachelor's Thesis at the Technical University of Munich<br  />
 
 ## Usage
 Place the files `render_chat.rb`, `render_cursor.rb`, and `render_whiteboard.rb` in `/usr/local/bigbluebutton/core/scripts/post_publish` with executable rights.

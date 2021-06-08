@@ -51,11 +51,13 @@ BigBlueButton.logger.info("Starting render_cursor.rb for [#{meeting_id}]")
 @doc = Nokogiri::XML(File.open("#{published_files}/cursor.xml"))
 @img = Nokogiri::XML(File.open("#{published_files}/shapes.svg"))
 @pan = Nokogiri::XML(File.open("#{published_files}/panzooms.xml"))
+@meta = Nokogiri::XML(File.open("#{published_files}/metadata.xml"))
 
 # Get intervals to display the frames
 timestamps = @doc.xpath('//@timestamp')
+recording_duration = (@meta.xpath('//duration').text.to_f / 1000).round(0)
 
-intervals = timestamps.to_a.map(&:to_s).map(&:to_f).uniq
+intervals = timestamps.to_a.map(&:to_s).map(&:to_f).push(recording_duration).uniq
 
 # Creates directory for the temporary assets
 Dir.mkdir("#{published_files}/cursor") unless File.exist?("#{published_files}/cursor")

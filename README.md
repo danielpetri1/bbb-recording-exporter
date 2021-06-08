@@ -57,12 +57,9 @@ A server-side script to export a BigBlueButton 2.3-dev recording as a single vid
 
 ![BigBlueButton Recording Exporter - render into mp4 file](https://i.imgur.com/CjSFtzi.png "BBB video meeting exporter")
 
-  
-  
+
 
 ## What's coming?
-
-🔜 Integration into BBB and Greenlight's UI<br  />
 
 🔜 Faster, less resource-intensive exports<br  />
 
@@ -76,6 +73,10 @@ BBB sessions will then automatically be exported as a `meeting.mp4` file, which 
 The meeting's ID is the alphanumeric string following the 2.3 in the recording's URL.
 
 Existing recordings can be rebuilt to run the exporting scripts automatically again.
+
+If you do not have access to a BBB server, check out the branch 'client-side'.
+
+To add a download button to Greenlight's UI, change [these](https://github.com/danielpetri1/greenlight/commit/72c2165e4a504aa40e116a83864de36dea540b65) files.
  
 ## Requirements
 Access to a functioning BBB 2.3 server. <br  />

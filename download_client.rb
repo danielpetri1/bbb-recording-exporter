@@ -8,7 +8,13 @@ require 'fileutils'
 def download(file)
   # Format: "https://hostname/presentation/meetingID/file"
 
-  path = "https://HOSTNAME/presentation/MEETING-ID/#{file}"
+  # Mouse test
+  path = "https://vmott40.in.tum.de/presentation/fccbbfd5ae98f6eb1e6bf57fc8970672da7244b6-1623321256773/#{file}"
+
+  # Lasttest
+  path = "https://vmott40.in.tum.de/presentation/b87bbe0888dff19aa181be51d86a3f52543fc5a7-1620820241322/#{file}"
+  
+  path = "https://vmott40.in.tum.de/presentation/fccbbfd5ae98f6eb1e6bf57fc8970672da7244b6-1623332929336/#{file}"
 
   puts "Downloading #{path}"
 

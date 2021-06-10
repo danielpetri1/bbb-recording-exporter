@@ -10,11 +10,13 @@ start = Time.now
 @doc = Nokogiri::XML(File.open('cursor.xml'))
 @img = Nokogiri::XML(File.open('shapes.svg'))
 @pan = Nokogiri::XML(File.open('panzooms.xml'))
+@meta = Nokogiri::XML(File.open("#{published_files}/metadata.xml"))
 
 # Get intervals to display the frames
 timestamps = @doc.xpath('//@timestamp')
+recording_duration = (@meta.xpath('//duration').text.to_f / 1000).round(0)
 
-intervals = timestamps.to_a.map(&:to_s).map(&:to_f).uniq
+intervals = timestamps.to_a.map(&:to_s).map(&:to_f).push(recording_duration).uniq
 
 # Creates new file to hold the timestamps of the cursor's position
 File.open('timestamps/cursor_timestamps', 'w') {}

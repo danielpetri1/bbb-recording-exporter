@@ -36,27 +36,29 @@ timestamps.each do |timestamp|
     cursor_x = (pointer[0].to_f * width.to_f).round(3)
     cursor_y = (pointer[1].to_f * height.to_f).round(3)
 
+    # Scaling required to reach target dimensions
     x_scale = 1600 / width.to_f
     y_scale = 1080 / height.to_f
 
+    # Keep aspect ratio
     scale_factor = [x_scale, y_scale].min
-
-    puts scale_factor
-
+    
+    # Scale
     cursor_x *= scale_factor
     cursor_y *= scale_factor
 
-    offset = [((1600 - width.to_f) / 2).abs, ((1080 - height.to_f) / 2).abs].max
+    # Translate given difference to new on-screen dimensions
+    x_offset = (1600 - scale_factor * width.to_f) / 2
+    y_offset = (1080 - scale_factor * height.to_f) / 2
 
-    #puts width
-    #puts height
-    puts offset
+    cursor_x += x_offset
+    cursor_y += y_offset
 
-    puts "======="
+    puts "x offset: #{x_offset}, y offset: #{y_offset}, scale factor: #{scale_factor}"
 
     # Writes the timestamp and position down
     File.open('timestamps/cursor_timestamps', 'a') do |file|
-        file.puts "#{timestamp}  drawtext reinit 'x=#{cursor_x + 260}:y=#{cursor_y}';";
+        file.puts "#{timestamp}  drawtext reinit 'x=#{cursor_x}:y=#{cursor_y}';";
     end
 
     frame_number += 1

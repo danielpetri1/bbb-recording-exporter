@@ -138,9 +138,9 @@ frames.each do |frame|
   end
 
   # Saves frame as SVG file (for debugging purposes)
-  # File.open("frames/frame#{frame_number}.svg", 'w') do |file|
-    # file.write(builder.to_xml)
-  # end
+  File.open("frames/frame#{frame_number}.svg", 'w') do |file|
+    file.write(builder.to_xml)
+  end
 
   # Writes its duration down
   # File.open('timestamps/whiteboard_timestamps', 'a') do |file|

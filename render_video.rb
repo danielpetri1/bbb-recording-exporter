@@ -23,5 +23,15 @@ ffmpeg -f lavfi -i color=c=white:s=1600x1080 -t 973 -vf "sendcmd=f=timestamps/cu
 
 ffmpeg -f lavfi -i color=c=white:s=1600x1080 \
  -f concat -safe 0 -i timestamps/whiteboard_timestamps \
- -filter_complex '[0][1]overlay[slides];[slides]sendcmd=f=timestamps/cursor_timestamps,drawtext=fontsize=30:fontcolor=red:text=•:fontfile=/System/Library/Fonts/Supplemental/Verdana.ttf' \
--c:a aac -shortest -y -t 300 merged.mp4
+ -filter_complex '[0][1]overlay[slides];[slides]sendcmd=f=timestamps/cursor_timestamps,drawtext=fontsize=30:fontcolor=red:text=•' \
+-c:a aac -shortest -y -t 168 merged.mp4
+
+ffmpeg -f lavfi -i color=c=white:s=1600x1080 -f concat -safe 0 -i timestamps/whiteboard_timestamps -filter_complex '[0][1]overlay[slides];[slides]sendcmd=f=timestamps/cursor_timestamps,drawtext=fontsize=30:fontcolor=red:text=•' -c:a aac -shortest -y -t 168 merged.mp4
+
+ffmpeg \
+    -f lavfi -i color=c=white:s=1920x1080 \
+    -f concat -safe 0 -i timestamps/whiteboard_timestamps \
+    -i cursor/cursor.svg \
+    -i chats/chat.svg \
+    -filter_complex '[0][1]overlay@1=x=320[slides];[slides]sendcmd=f=timestamps/cursor_timestamps[cursor];[cursor][3]overlay@2[chat];[chat]sendcmd=f=timestamps/chat_timestamps' \
+    -c:a aac -shortest -y -t 168 merged.mp4

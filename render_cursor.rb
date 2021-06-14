@@ -15,6 +15,7 @@ timestamps = @doc.xpath('//@timestamp').to_a.map(&:to_s).map(&:to_f)
 
 # Creates new file to hold the timestamps and the cursor's position
 File.open('timestamps/cursor_timestamps', 'w') {}
+File.open('timestamps/cursor_timestamps2', 'w') {}
 
 # Obtain interval range that each frame will be shown for
 frame_number = 0
@@ -54,11 +55,28 @@ timestamps.each do |timestamp|
     cursor_x += x_offset
     cursor_y += y_offset
 
-    puts "x offset: #{x_offset}, y offset: #{y_offset}, scale factor: #{scale_factor}"
+    # puts "x offset: #{x_offset}, y offset: #{y_offset}, scale factor: #{scale_factor}"
+
+    # Center circle around coordinate
+    cursor_x -= 4
+    cursor_y -= 4
+
+    # Move whiteboard to the right, making space for the chat and webcams
+    cursor_x += 320
+    
+    # Writes the timestamp and position down
+    #File.open('timestamps/cursor_timestamps', 'a') do |file|
+    #    file.puts "#{timestamp}  drawtext reinit 'x=#{cursor_x}:y=#{cursor_y}';";
+    #end
 
     # Writes the timestamp and position down
-    File.open('timestamps/cursor_timestamps', 'a') do |file|
-        file.puts "#{timestamp}  drawtext reinit 'x=#{cursor_x}:y=#{cursor_y}';";
+    File.open('timestamps/cursor_timestamps2', 'a') do |file|
+        file.puts "#{timestamp}"
+        
+        #file.puts "overlay@1 x #{cursor_x}, y #{cursor_y};"
+
+        file.puts "overlay@1 x #{cursor_x},"
+        file.puts "overlay@1 y #{cursor_y};"
     end
 
     frame_number += 1

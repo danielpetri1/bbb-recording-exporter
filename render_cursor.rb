@@ -15,15 +15,12 @@ timestamps = @doc.xpath('//@timestamp').to_a.map(&:to_s).map(&:to_f)
 
 # Creates new file to hold the timestamps and the cursor's position
 File.open('timestamps/cursor_timestamps', 'w') {}
-File.open('timestamps/cursor_timestamps2', 'w') {}
-
-# Obtain interval range that each frame will be shown for
-frame_number = 0
+File.open('timestamps/cursor_timestamps_text', 'w') {}
 
 # Obtains all cursor events
 cursor = @doc.xpath('//event/cursor', 'xmlns' => 'http://www.w3.org/2000/svg')
 
-timestamps.each do |timestamp|
+timestamps.each.with_index do |timestamp, frame_number|
 
     # Query to figure out which slide we're on - based on interval start since slide can change if mouse stationary
     slide = @img.xpath("(//xmlns:image[@in <= #{timestamp}])[last()]", 'xmlns' => 'http://www.w3.org/2000/svg')
@@ -55,31 +52,27 @@ timestamps.each do |timestamp|
     cursor_x += x_offset
     cursor_y += y_offset
 
-    # puts "x offset: #{x_offset}, y offset: #{y_offset}, scale factor: #{scale_factor}"
+    # Subtract radius to center mouse pointer
+    cursor_x -= 8
+    cursor_y -= 8
 
-    # Center circle around coordinate
-    cursor_x -= 4
-    cursor_y -= 4
+    # puts "x offset: #{x_offset}, y offset: #{y_offset}, scale factor: #{scale_factor}"
 
     # Move whiteboard to the right, making space for the chat and webcams
     cursor_x += 320
-    
-    # Writes the timestamp and position down
-    #File.open('timestamps/cursor_timestamps', 'a') do |file|
-    #    file.puts "#{timestamp}  drawtext reinit 'x=#{cursor_x}:y=#{cursor_y}';";
-    #end
 
     # Writes the timestamp and position down
-    File.open('timestamps/cursor_timestamps2', 'a') do |file|
+    File.open('timestamps/cursor_timestamps', 'a') do |file|
         file.puts "#{timestamp}"
-        
-        #file.puts "overlay@1 x #{cursor_x}, y #{cursor_y};"
 
-        file.puts "overlay@1 x #{cursor_x},"
-        file.puts "overlay@1 y #{cursor_y};"
+        file.puts "overlay@mouse x #{cursor_x},"
+        file.puts "overlay@mouse y #{cursor_y};"
     end
 
-    frame_number += 1
+    # Alternative method of rendering the mouse using drawtext instead of overlays
+    File.open('timestamps/cursor_timestamps_text', 'a') do |file|
+        file.puts "#{timestamp} drawtext reinit  'x=#{cursor_x}:y=#{cursor_y}';"
+    end
 end
 
 finish = Time.now

@@ -9,22 +9,22 @@ start = Time.now
 
 # Opens slides_new.xml
 @chat = Nokogiri::XML(File.open('slides_new.xml'))
-#@meta = Nokogiri::XML(File.open('metadata.xml'))
+@meta = Nokogiri::XML(File.open('metadata.xml'))
 
 # Get chat messages and timings
-#recording_duration = (@meta.xpath('//duration').text.to_f / 1000).round(0)
+recording_duration = (@meta.xpath('//duration').text.to_f / 1000).round(0)
 
-# ins = @chat.xpath('//@in').to_a.map(&:to_s).unshift(0).push(recording_duration)
-ins = @chat.xpath('//@in').to_a.map(&:to_s)
+ins = @chat.xpath('//@in').to_a.map(&:to_s).unshift(0).push(recording_duration)
+# ins = @chat.xpath('//@in').to_a.map(&:to_s)
 
 # Creates new file to hold the timestamps of the chat
 File.open('timestamps/chat_timestamps', 'w') {}
 
-#chat_intervals = []
+chat_intervals = []
 
-#ins.each_cons(2) do |(a, b)|
-  #chat_intervals << [a, b]
-#end
+ins.each_cons(2) do |(a, b)|
+  chat_intervals << [a, b]
+end
 
 messages = @chat.xpath("//chattimeline[@target=\"chat\"]")
 
@@ -55,59 +55,60 @@ messages.each do |message|
     dy += 1
 end
 
-chat_y = -840
+base = -840
+#chat_y = 1080
 
 # Create SVG chat with all messages
-builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-    xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
-    xml.svg(width: '320', height: dy * 15, version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
-        xml << text
-    end
-end
+# builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
+    #xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
+    # xml.svg(width: '320', height: [dy * 15, 32767].min, version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
+        #xml << text
+    # end
+#end
 
-File.open("chats/chat.svg", 'w') do |file|
-    file.write(builder.to_xml)
-end
+# File.open("chats/chat.svg", 'w') do |file|
+    # file.write(builder.to_xml)
+# end
 
-ins.each.with_index do |timestamp, chat_number|
+chat_intervals.each.with_index do |frame, chat_number|
+# ins.each.with_index do |timestamp, chat_number|
     
-    chat_y += message_heights[chat_number] * 15
+    interval_start = frame[0]
+    interval_end = frame[1]
+    #chat_y -= message_heights[chat_number] * 15
 
-    File.open('timestamps/chat_timestamps', 'a') do |file|
-        file.puts "#{timestamp}"
-        file.puts "overlay@2 x 0,"
-        file.puts "overlay@2 y #{chat_y};"
-    end
+    base += message_heights[chat_number] * 15
 
-    #File.open('timestamps/chat_timestamps', 'a') do |file|
-        #file.puts "file ../chats/chat#{chat_number}.svgz"
-        #file.puts "duration #{(interval_end.to_f - interval_start.to_f).round(1)}"
-    #end
-
-    # Create SVG chat window
-    #builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-        #xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
-        #xml.svg(width: '320', height: '840', viewBox: "0 #{base} 320 840", version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
-            #xml << text
-        #end
-    #end
-
-    # Saves frame as SVGZ file
-    #File.open("chats/chat#{chat_number}.svgz", 'w') do |file|
-        #svgz = Zlib::GzipWriter.new(file)
-        #svgz.write(builder.to_xml)
-        #svgz.close
-    #end
-
-    # # Saves frame as SVG file (for debugging purposes)
-    # File.open("chats/chat#{chat_number}.svg", 'w') do |file|
-    #     file.write(builder.to_xml)
+    # File.open('timestamps/chat_timestamps', 'a') do |file|
+        # file.puts "#{timestamp}"
+        # file.puts "overlay@msg x 0,"
+        # file.puts "overlay@msg y #{chat_y};"
     # end
 
-    #File.open('timestamps/chat_timestamps', 'a') do |file|
-        #file.puts "file ../chats/chat#{chat_number}.svgz"
-        #file.puts "duration #{(interval_end.to_f - interval_start.to_f).round(1)}"
-    #end
+    File.open('timestamps/chat_timestamps', 'a') do |file|
+        file.puts "file ../chats/chat#{chat_number}.svgz"
+        file.puts "duration #{(interval_end.to_f - interval_start.to_f).round(1)}"
+    end
+
+    # Create SVG chat window
+    builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
+        xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
+        xml.svg(width: '320', height: '840', viewBox: "0 #{base} 320 840", version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
+            xml << text
+        end
+    end
+
+    # Saves frame as SVGZ file
+    File.open("chats/chat#{chat_number}.svgz", 'w') do |file|
+        svgz = Zlib::GzipWriter.new(file)
+        svgz.write(builder.to_xml)
+        svgz.close
+    end
+
+    # Saves frame as SVG file (for debugging purposes)
+    File.open("chats/chat#{chat_number}.svg", 'w') do |file|
+        file.write(builder.to_xml)
+    end
 end
 
 # Benchmark

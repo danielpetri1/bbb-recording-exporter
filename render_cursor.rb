@@ -50,47 +50,39 @@ BigBlueButton.logger.info("Starting render_cursor.rb for [#{meeting_id}]")
 # Opens cursor.xml and shapes.svg
 @doc = Nokogiri::XML(File.open("#{published_files}/cursor.xml"))
 @img = Nokogiri::XML(File.open("#{published_files}/shapes.svg"))
-@pan = Nokogiri::XML(File.open("#{published_files}/panzooms.xml"))
-@meta = Nokogiri::XML(File.open("#{published_files}/metadata.xml"))
 
-# Get intervals to display the frames
-timestamps = @doc.xpath('//@timestamp')
-recording_duration = (@meta.xpath('//duration').text.to_f / 1000).round(0)
-
-intervals = timestamps.to_a.map(&:to_s).map(&:to_f).push(recording_duration).uniq
+# Get cursor timestamps
+timestamps = @doc.xpath('//@timestamp').to_a.map(&:to_s).map(&:to_f)
 
 # Creates directory for the temporary assets
 Dir.mkdir("#{published_files}/cursor") unless File.exist?("#{published_files}/cursor")
 
-# Creates new file to hold the timestamps of the cursor's position
-File.open("#{published_files}/timestamps/cursor_timestamps", 'w') {}
+# Create the mouse pointer
+builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
+    # xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
 
-# Obtain interval range that each frame will be shown for
-frame_number = 0
-frames = []
-
-intervals.each_cons(2) do |(a, b)|
-    frames << [a, b]
+    xml.svg(width: "16", height: "16", version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg') do
+        xml.circle(cx: '8', cy: '8', r: '8', fill: 'red')
+    end
 end
+
+File.open("#{published_files}/cursor/cursor.svg", 'w') do |file|
+    file.write(builder.to_xml)
+end
+
+# Creates new file to hold the timestamps and the cursor's position
+File.open("#{published_files}/timestamps/cursor_timestamps", 'w') {}
 
 # Obtains all cursor events
 cursor = @doc.xpath('//event/cursor', 'xmlns' => 'http://www.w3.org/2000/svg')
 
-frames.each do |frame|
-    interval_start = frame[0]
-    interval_end = frame[1]
+timestamps.each.with_index do |timestamp, frame_number|
 
     # Query to figure out which slide we're on - based on interval start since slide can change if mouse stationary
-    slide = @img.xpath("(//xmlns:image[@in <= #{interval_start}])[last()]", 'xmlns' => 'http://www.w3.org/2000/svg')
-
-    # Query viewBox parameter of slide
-    view_box = @pan.xpath("(//event[@timestamp <= #{interval_start}]/viewBox/text())[last()]")
+    slide = @img.xpath("(//xmlns:image[@in <= #{timestamp}])[last()]", 'xmlns' => 'http://www.w3.org/2000/svg')
 
     width = slide.attr('width').to_s
     height = slide.attr('height').to_s
-
-    x = slide.attr('x').to_s
-    y = slide.attr('y').to_s
 
     # Get cursor coordinates
     pointer = cursor[frame_number].text.split
@@ -98,34 +90,33 @@ frames.each do |frame|
     cursor_x = (pointer[0].to_f * width.to_f).round(3)
     cursor_y = (pointer[1].to_f * height.to_f).round(3)
 
-    # Builds SVG frame
-    builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-        # xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
+    # Scaling required to reach target dimensions
+    x_scale = 1600 / width.to_f
+    y_scale = 1080 / height.to_f
 
-        xml.svg(width: "1600", height: "1080", x: x, y: y, version: '1.1', viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg') do
-            xml.circle(cx: cursor_x, cy: cursor_y, r: '10', fill: 'red') unless cursor_x.negative? || cursor_y.negative?
-        end
-    end
+    # Keep aspect ratio
+    scale_factor = [x_scale, y_scale].min
+    
+    # Scale
+    cursor_x *= scale_factor
+    cursor_y *= scale_factor
 
-    # Saves frame as SVGZ file
-    File.open("#{published_files}/cursor/cursor#{frame_number}.svgz", 'w') do |file|
-        svgz = Zlib::GzipWriter.new(file)
-        svgz.write(builder.to_xml)
-        svgz.close
-    end
+    # Translate given difference to new on-screen dimensions
+    x_offset = (1600 - scale_factor * width.to_f) / 2
+    y_offset = (1080 - scale_factor * height.to_f) / 2
 
-    # Writes its duration down
+    cursor_x += x_offset
+    cursor_y += y_offset
+
+    # Move whiteboard to the right, making space for the chat and webcams
+    cursor_x += 320
+
+    # Writes the timestamp and position down
     File.open("#{published_files}/timestamps/cursor_timestamps", 'a') do |file|
-        file.puts "file #{published_files}/cursor/cursor#{frame_number}.svgz"
-        file.puts "duration #{(interval_end - interval_start).round(1)}"
+        file.puts "#{timestamp}"
+        file.puts "overlay@mouse x #{cursor_x},"
+        file.puts "overlay@mouse y #{cursor_y};"
     end
-
-    frame_number += 1
-end
-
-# The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
-File.open("#{published_files}/timestamps/cursor_timestamps", 'a') do |file|
-    file.puts "file #{published_files}/cursor/cursor#{frame_number - 1}.svgz"
 end
 
 finish = Time.now

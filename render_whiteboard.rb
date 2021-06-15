@@ -231,19 +231,19 @@ deskshare = File.file?("#{published_files}/deskshare/deskshare.#{extension}")
 if deskshare
   render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
  "-f concat -safe 0 -i #{published_files}/timestamps/whiteboard_timestamps " \
- "-f concat -safe 0 -i #{published_files}/timestamps/cursor_timestamps " \
+ "-loop 1 -i #{published_files}/cursor/cursor.svg " \
  "-f concat -safe 0 -i #{published_files}/timestamps/chat_timestamps " \
  "-i #{published_files}/video/webcams.#{extension} " \
  "-i #{published_files}/deskshare/deskshare.#{extension} -filter_complex " \
-"'[4]scale=w=320:h=240[webcams];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1[deskshare];[0][deskshare]overlay=x=320[screenshare];[screenshare][1]overlay=x=320[whiteboard];[whiteboard][2]overlay=x=320[cursor];[cursor][3]overlay[chat];[chat][webcams]overlay' " \
+"'[2]sendcmd=f=#{published_files}/timestamps/cursor_timestamps[cursor];[4]scale=w=320:h=240[webcams];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1[deskshare];[0][deskshare]overlay=x=320:y=90[screenshare];[screenshare][1]overlay=x=320[whiteboard];[whiteboard][cursor]overlay@mouse[pointer];[pointer][3]overlay=y=240[chat];[chat][webcams]overlay' " \
 "-c:a aac -shortest -y #{published_files}/meeting.mp4"
 else
   render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
 "-f concat -safe 0 -i #{published_files}/timestamps/whiteboard_timestamps " \
- "-f concat -safe 0 -i #{published_files}/timestamps/cursor_timestamps " \
+ "-loop 1 -i #{published_files}/cursor/cursor.svg " \
  "-f concat -safe 0 -i #{published_files}/timestamps/chat_timestamps " \
  "-i #{published_files}/video/webcams.#{extension} -filter_complex " \
- "'[4]scale=w=320:h=240[webcams];[0][1]overlay=x=320[slides];[slides][2]overlay=x=320[cursor];[cursor][3]overlay=y=240[chat];[chat][webcams]overlay' " \
+ "'[2]sendcmd=f=#{published_files}/timestamps/cursor_timestamps[cursor];[4]scale=w=320:h=240[webcams];[0][1]overlay=x=320[slides];[slides][cursor]overlay@mouse[pointer];[pointer][3]overlay=y=240[chat];[chat][webcams]overlay' " \
  "-c:a aac -shortest -y #{published_files}/meeting.mp4"
 end
 

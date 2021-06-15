@@ -1,5 +1,5 @@
-#!/usr/bin/env ruby
-# frozen_string_literal: true
+#!/usr/bin/ruby
+# frozen_string_literal: false
 
 require 'nokogiri'
 require 'zlib'
@@ -8,110 +8,77 @@ require 'zlib'
 start = Time.now
 
 # Opens slides_new.xml
-@chat = Nokogiri::XML(File.open('slides_new.xml'))
-@meta = Nokogiri::XML(File.open('metadata.xml'))
+@chat = Nokogiri::XML(File.open("slides_new.xml"))
 
 # Get chat messages and timings
-recording_duration = (@meta.xpath('//duration').text.to_f / 1000).round(0)
+# recording_duration = (@meta.xpath('//duration').text.to_f / 1000).round(0)
 
-ins = @chat.xpath('//@in').to_a.map(&:to_s).unshift(0).push(recording_duration)
-# ins = @chat.xpath('//@in').to_a.map(&:to_s)
+ins = @chat.xpath('//@in').to_a.map(&:to_s) # .unshift(0).push(recording_duration)
 
 # Creates new file to hold the timestamps of the chat
-File.open('timestamps/chat_timestamps', 'w') {}
-
-chat_intervals = []
-
-ins.each_cons(2) do |(a, b)|
-  chat_intervals << [a, b]
-end
+File.open("timestamps/chat_timestamps", 'w') {}
 
 messages = @chat.xpath("//chattimeline[@target=\"chat\"]")
 
 # Line break offset
-dy = 0
+dy = 12.5
 
 # Empty string to build <text>...</text> tag from
 text = ""
 message_heights = [0]
 
 messages.each do |message|
+    break if dy >= 32_767
 
     # User name and chat timestamp
-    text += "<text x=\"2.5\" y=\"12.5\" dy=\"#{dy}em\" font-family=\"monospace\" font-size=\"15\" font-weight=\"bold\">#{message.attr('name')}</text>"
-    text += "<text x=\"2.5\" y=\"12.5\" dx=\"#{message.attr('name').length}em\" dy=\"#{dy}em\" font-family=\"monospace\" font-size=\"15\" fill=\"grey\" opacity=\"0.5\">#{Time.at(message.attr('in').to_f.round(0)).utc.strftime('%H:%M:%S')}</text>"
-    
+    text << "<text y=\"#{dy}\" font-weight=\"bold\">#{message.attr('name')}    #{Time.at(message.attr('in').to_f.round(0)).utc.strftime('%H:%M:%S')}</text>"
+
     line_breaks = message.attr('message').chars.each_slice(35).map(&:join)
     message_heights.push(line_breaks.size + 2)
 
-    dy += 1
+    dy += 15
 
-    # Message text 
-    line_breaks.each.with_index do |line|
-        text += "<text x=\"2.5\" y=\"12.5\" dy=\"#{dy}em\" font-family=\"monospace\" font-size=\"15\">#{line}</text>"
-        dy += 1
+    # Message text
+    line_breaks.each do |line|
+        text << "<text y=\"#{dy}\">#{line}</text>"
+        dy += 15
     end
-    
-    dy += 1
+
+    dy += 15
 end
 
-base = -840
-#chat_y = 1080
+chat_y = 1080
 
-# Create SVG chat with all messages
-# builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-    #xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
-    # xml.svg(width: '320', height: [dy * 15, 32767].min, version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
-        #xml << text
-    # end
-#end
+# Create SVG chat with all messages for debugging purposes
+builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
+     # xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
+     xml.svg(width: '320', height: [dy * 15, 32_767].min, version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
+        xml << "<style>text{font-family: monospace; font-size: 15}</style>"
+        xml << text
+     end
+end
 
-# File.open("chats/chat.svg", 'w') do |file|
-    # file.write(builder.to_xml)
-# end
+File.open("chats/chat.svg", 'w') do |file|
+    file.write(builder.to_xml)
+end
 
-chat_intervals.each.with_index do |frame, chat_number|
-# ins.each.with_index do |timestamp, chat_number|
-    
-    interval_start = frame[0]
-    interval_end = frame[1]
-    #chat_y -= message_heights[chat_number] * 15
+ins.each.with_index do |timestamp, chat_number|
+    if message_heights[chat_number].nil?
+        break
 
-    base += message_heights[chat_number] * 15
+    else
+        chat_y -= message_heights[chat_number] * 15
 
-    # File.open('timestamps/chat_timestamps', 'a') do |file|
-        # file.puts "#{timestamp}"
-        # file.puts "overlay@msg x 0,"
-        # file.puts "overlay@msg y #{chat_y};"
-    # end
-
-    File.open('timestamps/chat_timestamps', 'a') do |file|
-        file.puts "file ../chats/chat#{chat_number}.svgz"
-        file.puts "duration #{(interval_end.to_f - interval_start.to_f).round(1)}"
-    end
-
-    # Create SVG chat window
-    builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-        xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
-        xml.svg(width: '320', height: '840', viewBox: "0 #{base} 320 840", version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
-            xml << text
+        File.open('timestamps/chat_timestamps', 'a') do |file|
+            file.puts timestamp.to_s
+            file.puts "overlay@msg x 0,"
+            file.puts "overlay@msg y #{chat_y};"
         end
-    end
-
-    # Saves frame as SVGZ file
-    File.open("chats/chat#{chat_number}.svgz", 'w') do |file|
-        svgz = Zlib::GzipWriter.new(file)
-        svgz.write(builder.to_xml)
-        svgz.close
-    end
-
-    # Saves frame as SVG file (for debugging purposes)
-    File.open("chats/chat#{chat_number}.svg", 'w') do |file|
-        file.write(builder.to_xml)
     end
 end
 
 # Benchmark
 finish = Time.now
-
 puts finish - start
+
+exit 0

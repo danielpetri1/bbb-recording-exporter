@@ -23,26 +23,25 @@
 # No deskshare - mouse overlay method
 ffmpeg -f lavfi -i color=c=white:s=1920x1080 \
     -f concat -safe 0 -i timestamps/whiteboard_timestamps \
-    -loop 1 -i cursor/cursor.svg \
-    -f concat -safe 0 -i timestamps/chat_timestamps \
+    -framerate 10 -loop 1 -i cursor/cursor.svg \
+    -framerate 1 -loop 1 -i chats/chat.svg \
     -i video/webcams.webm \
-    -filter_complex "[2]sendcmd=f=timestamps/cursor_timestamps[cursor];[4]scale=w=320:h=240[webcams];[0][1]overlay=x=320[slides];[slides][cursor]overlay@mouse[whiteboard];[whiteboard][webcams]overlay[cams];[cams][3]overlay=y=240" \
-    -c:a aac -shortest -y merged.mp4
-
-# No deskshare - mouse text method
-    ffmpeg -f lavfi -i color=c=white:s=1920x1080 \
-    -f concat -safe 0 -i timestamps/whiteboard_timestamps \
-    -f concat -safe 0 -i timestamps/chat_timestamps \
-    -i video/webcams.webm \
-    -filter_complex "[3]scale=w=320:h=240[webcams];[0][1]overlay=x=320[slides];[slides]sendcmd=f=timestamps/cursor_timestamps_text,drawtext=fontsize=30:fontfile=/System/Library/Fonts/Supplemental/Verdana.ttf:fontcolor=red:text=•[cursor];[cursor][2]overlay=y=240[chat];[chat][webcams]overlay" \
+    -filter_complex "[2]sendcmd=f=timestamps/cursor_timestamps[cursor];[3]sendcmd=f=timestamps/chat_timestamps[chat];[4]scale=w=320:h=240[webcams];[0][1]overlay=x=320[slides];[slides][cursor]overlay@mouse[whiteboard];[whiteboard][chat]overlay@msg[chats];[chats][webcams]overlay" \
     -c:a aac -shortest -y merged.mp4
 
 # With deskshare
 ffmpeg -f lavfi -i color=c=white:s=1920x1080 \
     -f concat -safe 0 -i timestamps/whiteboard_timestamps \
-    -loop 1 -i cursor/cursor.svg \
-    -f concat -safe 0 -i timestamps/chat_timestamps \
+    -framerate 10 -loop 1 -i cursor/cursor.svg \
+    -framerate 1 -loop 1 -i chat/chat.svg \
     -i video/webcams.webm \
     -i deskshare/deskshare.webm \
-    -filter_complex "[2]sendcmd=f=timestamps/cursor_timestamps[cursor];[4]scale=w=320:h=240[webcams];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1[deskshare];[0][deskshare]overlay=x=320[screenshare];[screenshare][1]overlay=x=320[slides];[slides][cursor]overlay@mouse[whiteboard];[whiteboard][webcams]overlay[cams];[cams][3]overlay=y=240" \
+    -filter_complex "[2]sendcmd=f=timestamps/cursor_timestamps[cursor];[4]scale=w=320:h=240[webcams];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1[deskshare];[0][deskshare]overlay=x=320:y=90[screenshare];[screenshare][1]overlay=x=320[slides];[slides][cursor]overlay@mouse[whiteboard];[whiteboard][webcams]overlay[cams];[cams][3]overlay=y=240" \
     -c:a aac -shortest -y merged.mp4
+
+
+# Sendcmd chat test
+ffmpeg -f lavfi -i color=c=white:s=1920x1080 \
+    -framerate 1 -loop 1 -i chats/chat.svg \
+    -filter_complex '[1]sendcmd=f=timestamps/chat_timestamps[chat];[0][chat]overlay@chat=y=1080' \
+    -t 155 -y chat.mp4

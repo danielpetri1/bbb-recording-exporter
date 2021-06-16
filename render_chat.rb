@@ -62,14 +62,12 @@ File.open("chats/chat.svg", 'w') do |file|
     file.write(builder.to_xml)
 end
 
-ins.each.with_index do |timestamp, chat_number|
-    if message_heights[chat_number].nil?
-        break
-
-    else
-        chat_y -= message_heights[chat_number] * 15
-
-        File.open('timestamps/chat_timestamps', 'a') do |file|
+File.open('timestamps/chat_timestamps', 'a') do |file|
+    ins.each.with_index do |timestamp, chat_number|
+        if message_heights[chat_number].nil?
+            break
+        else
+            chat_y -= message_heights[chat_number] * 15
             file.puts timestamp.to_s
             file.puts "overlay@msg x 0,"
             file.puts "overlay@msg y #{chat_y};"

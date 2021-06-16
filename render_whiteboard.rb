@@ -94,75 +94,79 @@ intervals.each_cons(2) do |(a, b)|
 end
 
 # Render the visible frame for each interval
-frames.each do |frame|
-  interval_start = frame[0]
-  interval_end = frame[1]
+File.open('timestamps/whiteboard_timestamps', 'a') do |file|
+  frames.each do |frame|
+    interval_start = frame[0]
+    interval_end = frame[1]
 
-  # Query slide we're currently on
-  slide = @doc.xpath("//xmlns:image[@in <= #{interval_start} and #{interval_end} <= @out]", 'xmlns' => 'http://www.w3.org/2000/svg')
+    # Query slide we're currently on
+    slide = @doc.xpath("//xmlns:image[@in <= #{interval_start} and #{interval_end} <= @out]", 'xmlns' => 'http://www.w3.org/2000/svg')
 
-  # Query current viewbox parameter
-  view_box = @pan.xpath("(//event[@timestamp <= #{interval_start}]/viewBox/text())[last()]")
+    # Query current viewbox parameter
+    view_box = @pan.xpath("(//event[@timestamp <= #{interval_start}]/viewBox/text())[last()]")
 
-  # Get slide information
-  slide_id = slide.attr('id').to_s
+    # Get slide information
+    slide_id = slide.attr('id').to_s
 
-  width = slide.attr('width').to_s
-  height = slide.attr('height').to_s
-  x = slide.attr('x').to_s
-  y = slide.attr('y').to_s
+    width = slide.attr('width').to_s
+    height = slide.attr('height').to_s
+    x = slide.attr('x').to_s
+    y = slide.attr('y').to_s
 
-  draw = @doc.xpath(
-    "//xmlns:g[@class=\"canvas\" and @image=\"#{slide_id}\"]/xmlns:g[@timestamp < \"#{interval_end}\" and (@undo = \"-1\" or @undo >= \"#{interval_end}\")]", 'xmlns' => 'http://www.w3.org/2000/svg'
-  )
+    draw = @doc.xpath(
+      "//xmlns:g[@class=\"canvas\" and @image=\"#{slide_id}\"]/xmlns:g[@timestamp < \"#{interval_end}\" and (@undo = \"-1\" or @undo >= \"#{interval_end}\")]", 'xmlns' => 'http://www.w3.org/2000/svg'
+    )
 
-  # Builds SVG frame
-  builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-    xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
-
-    xml.svg(width: "1600", height: "1080", x: x, y: y, version: '1.1', viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
+    # Builds SVG frame
+    builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
+      #xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
+      xml.svg(width: "1600", height: "1080", x: x, y: y, version: '1.1', viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
+      
       # Display background image
       xml.image('xlink:href': slide.attr('href'), width: width, height: height, preserveAspectRatio: "xMidYMid slice", x: x, y: y, style: slide.attr('style'))
+        # Add annotations
+        draw.each do |shape|
+          # Make shape visible
+          style = shape.attr('style')
+          style.sub! 'hidden', 'visible'
 
-      # Add annotations
-      draw.each do |shape|
-        # Make shape visible
-        style = shape.attr('style')
-        style.sub! 'hidden', 'visible'
-
-        xml.g(style: style) do
-          xml << shape.xpath('./*').to_s
+          xml.g(style: style) do
+            xml << shape.xpath('./*').to_s
+          end
         end
       end
     end
-  end
 
-  # Saves frame as SVG file (for debugging purposes)
-  File.open("frames/frame#{frame_number}.svg", 'w') do |file|
-    file.write(builder.to_xml)
-  end
+    # Saves frame as SVG file (for debugging purposes)
+    # File.open("frames/frame#{frame_number}.svg", 'w') do |file|
+      # file.write(builder.to_xml)
+    # end
 
-  # Writes its duration down
-  # File.open('timestamps/whiteboard_timestamps', 'a') do |file|
-  # file.puts "file ../frames/frame#{frame_number}.svg"
-  # file.puts "duration #{(interval_end - interval_start).round(1)}"
-  # end
+    # Writes its duration down
+    # File.open('timestamps/whiteboard_timestamps', 'a') do |file|
+      # file.puts "file ../frames/frame#{frame_number}.svg"
+      # file.puts "duration #{(interval_end - interval_start).round(1)}"
+    # end
 
-  # Saves frame as SVGZ file
-  File.open("frames/frame#{frame_number}.svgz", 'w') do |file|
-    svgz = Zlib::GzipWriter.new(file)
-    svgz.write(builder.to_xml)
-    svgz.close
-  end
+    # Saves frame as SVGZ file
+    File.open("frames/frame#{frame_number}.svgz", 'w') do |file|
+      svgz = Zlib::GzipWriter.new(file)
+      svgz.write(builder.to_xml)
+      svgz.close
+    end
 
-  # Writes its duration down
-  File.open('timestamps/whiteboard_timestamps', 'a') do |file|
     file.puts "file ../frames/frame#{frame_number}.svgz"
     file.puts "duration #{(interval_end - interval_start).round(1)}"
-  end
 
-  frame_number += 1
-  # puts frame_number
+    # Writes its duration down
+    #File.open('timestamps/whiteboard_timestamps', 'a') do |file|
+      #file.puts "file ../frames/frame#{frame_number}.svgz"
+      #file.puts "duration #{(interval_end - interval_start).round(1)}"
+    # end
+
+    frame_number += 1
+    # puts frame_number
+  end
 end
 
 # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)

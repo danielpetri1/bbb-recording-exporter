@@ -13,12 +13,12 @@ start = Time.now
 # Get chat messages and timings
 # recording_duration = (@meta.xpath('//duration').text.to_f / 1000).round(0)
 
-ins = @chat.xpath('//@in').to_a.map(&:to_s) # .unshift(0).push(recording_duration)
+ins = @chat.xpath('popcorn/chattimeline/@in').to_a.map(&:to_s) # .unshift(0).push(recording_duration)
 
 # Creates new file to hold the timestamps of the chat
 File.open("timestamps/chat_timestamps", 'w') {}
 
-messages = @chat.xpath("//chattimeline[@target=\"chat\"]")
+messages = @chat.xpath("popcorn/chattimeline[@target=\"chat\"]")
 
 # Line break offset
 dy = 12.5
@@ -69,7 +69,7 @@ File.open('timestamps/chat_timestamps', 'a') do |file|
         else
             chat_y -= message_heights[chat_number] * 15
             file.puts timestamp.to_s
-            file.puts "overlay@msg x 0,"
+            # file.puts "overlay@msg x 0,"
             file.puts "overlay@msg y #{chat_y};"
         end
     end

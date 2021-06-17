@@ -14,13 +14,13 @@ cursor = []
 dimensions = []
 
 @cursor_reader.each do |node|
-    timestamps << node.attribute('timestamp') if node.name == 'event' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    timestamps << node.attribute('timestamp').to_f if node.name == 'event' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
 
     cursor << node.inner_xml if node.name == 'cursor' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
 end
 
 @img_reader.each do |node|
-    dimensions << [node.attribute('in'), node.attribute('width'), node.attribute('height')] if node.name == 'image' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    dimensions << [node.attribute('in').to_f, node.attribute('width').to_f, node.attribute('height').to_f] if node.name == 'image' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
 end
 
 File.open('timestamps/cursor_timestamps', 'w') do |file|
@@ -33,11 +33,11 @@ File.open('timestamps/cursor_timestamps', 'w') do |file|
         #   file.puts "#{timestamp} overlay@m x -16, overlay@m y -16;"
         #   next
         # end
+        
+        dimension = dimensions.select { |t, _, _| t <= timestamp }.pop
 
-        dimension = dimensions.select { |t, _, _| t.to_f <= timestamp.to_f }.last
-
-        width = dimension[1].to_f
-        height = dimension[2].to_f
+        width = dimension[1]
+        height = dimension[2]
 
         # Calculate original cursor coordinates
         cursor_x = pointer[0].to_f * width

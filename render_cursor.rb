@@ -33,8 +33,14 @@ File.open('timestamps/cursor_timestamps', 'w') do |file|
         #   file.puts "#{timestamp} overlay@m x -16, overlay@m y -16;"
         #   next
         # end
-        
-        dimension = dimensions.select { |t, _, _| t <= timestamp }.pop
+
+        # dimension = dimensions.select { |t, _, _| t <= timestamp }.pop
+
+        next_slide = dimensions.find_index { |t, _, _| t > timestamp }
+        next_slide = dimensions.count if next_slide.nil?
+
+        dimensions = dimensions.drop(next_slide - 1)
+        dimension = dimensions.first
 
         width = dimension[1]
         height = dimension[2]

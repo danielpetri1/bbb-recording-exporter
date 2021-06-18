@@ -13,7 +13,7 @@ start = Time.now
 messages = []
 
 @chat_reader.each do |node|
-    if node.name == 'chattimeline' && node.attribute('target') == 'chat' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
+    if node.name == 'chattimeline' && node.attribute('target') == 'chat' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
         messages << [node.attribute('in').to_f, node.attribute('name'), node.attribute('message')]
     end
 end
@@ -23,7 +23,7 @@ svg_x = 0
 svg_y = 855
 
 svg_width = 8000 # Divisible by 320
-svg_height =  32760 # Divisible by 15
+svg_height = 32_760 # Divisible by 15
 
 # Chat viewbox coordinates
 chat_x = 0
@@ -34,17 +34,16 @@ text = ""
 overlay_position = []
 
 messages.each do |message|
-
     timestamp = message[0]
     name = message[1]
     chat = message[2]
 
     line_breaks = chat.chars.each_slice(35).map(&:join)
-    
+
     # Message height equals the line break amount + the line for the name / time + the empty line after
     message_height = (line_breaks.size + 2) * 15
 
-    if svg_y + message_height > svg_height then
+    if svg_y + message_height > svg_height
 
         svg_y = 855
         svg_x += 320
@@ -64,7 +63,7 @@ messages.each do |message|
     svg_y += 15
 
     # Message text
-    
+
     line_breaks.each do |line|
         text << "<text x=\"#{svg_x}\" y=\"#{svg_y}\">#{line}</text>"
         svg_y += 15
@@ -90,20 +89,18 @@ File.open("chats/chat.svgz", 'w') do |file|
 end
 
 # File.open("chats/chat.svg", 'w') do |file|
-    # file.write(builder.to_xml)
+# file.write(builder.to_xml)
 # end
 
 File.open('timestamps/chat_timestamps', 'w') do |file|
-    if overlay_position.empty? then file.puts "0 overlay@msg x 0, overlay@msg y 0;" end
-    
-    overlay_position.each do |chat_state|
+    file.puts "0 overlay@msg x 0, overlay@msg y 0;" if overlay_position.empty?
 
+    overlay_position.each do |chat_state|
         chat_x = chat_state[1]
         chat_y = chat_state[2]
 
         file.puts "#{chat_state[0]} crop@c x #{chat_x}, crop@c y #{chat_y};"
     end
-
 end
 
 # Benchmark

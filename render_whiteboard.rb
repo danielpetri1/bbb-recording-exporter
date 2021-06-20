@@ -12,7 +12,23 @@ start = Time.now
 @doc = Nokogiri::XML(File.open('shapes.svg')).remove_namespaces!
 
 # Opens panzooms.xml
-@pan = Nokogiri::XML(File.open('panzooms.xml'))
+pan_reader = Nokogiri::XML::Reader(File.open('panzooms.xml'))
+
+view_boxes = []
+reader_timestamps = []
+
+pan_reader.each do |node|
+  if node.name == 'event' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
+    reader_timestamps << node.attribute('timestamp').to_f
+  end
+  
+  if node.name == 'viewBox' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
+    view_boxes << node.inner_xml
+  end
+end
+
+# Get array containing [panzoom timestamp, view_box parameter]
+panzooms = reader_timestamps.zip(view_boxes)
 
 # Get intervals to display the frames
 ins = @doc.xpath('svg/image/@in')
@@ -21,9 +37,8 @@ timestamps = @doc.xpath('svg/g/g/@timestamp')
 undos = @doc.xpath('svg/g/g/@undo')
 images = @doc.xpath('svg/image')
 xhtml = @doc.xpath('svg/g/g/switch/foreignObject')
-zooms = @pan.xpath('recording/event/@timestamp')
 
-intervals = (ins + outs + timestamps + undos + zooms).to_a.map(&:to_s).map(&:to_f).uniq.sort
+intervals = (ins + outs + timestamps + undos).to_a.map(&:to_s).map(&:to_f).concat(reader_timestamps).uniq.sort
 
 # Image paths need to follow the URI Data Scheme (for slides and polls)
 images.each do |image|
@@ -107,7 +122,14 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     slide = @doc.xpath("svg/image[@in <= #{interval_start} and #{interval_end} <= @out]")
 
     # Query current viewbox parameter
-    view_box = @pan.xpath("(recording/event[@timestamp <= #{interval_start}]/viewBox/text())[last()]")
+    # view_box = @pan.xpath("(recording/event[@timestamp <= #{interval_start}]/viewBox/text())[last()]")
+
+    # Find index of the first panzoom coming after the current one
+    next_panzoom = panzooms.find_index { |t, _| t > interval_start}
+    next_panzoom = panzooms.count if next_panzoom.nil?
+
+    panzooms = panzooms.drop(next_panzoom - 1)
+    view_box = panzooms.first[1]
 
     # Get slide information
     slide_id = slide.attr('id').to_s
@@ -118,7 +140,7 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
 
     # Builds SVG frame
     builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-      # Add 'xmlns' => 'http://www.w3.org/2000/svg' for debugging
+      # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
       xml.svg(width: "1600", height: "1080", viewBox: view_box) do
       
       # Display background image
@@ -145,7 +167,7 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     end
 
     # Write the frame's duration down
-    file.puts "file ../frames/frame#{frame_number}.svg"
+    file.puts "file ../frames/frame#{frame_number}.svgz"
     file.puts "duration #{(interval_end - interval_start).round(1)}"
 
     frame_number += 1

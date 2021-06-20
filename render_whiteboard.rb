@@ -9,35 +9,42 @@ require 'zlib'
 start = Time.now
 
 # Opens shapes.svg
-@doc = Nokogiri::XML(File.open('shapes.svg'))
+@doc = Nokogiri::XML(File.open('shapes.svg')).remove_namespaces!
 
 # Opens panzooms.xml
 @pan = Nokogiri::XML(File.open('panzooms.xml'))
 
 # Get intervals to display the frames
-ins = @doc.xpath('//@in')
-outs = @doc.xpath('//@out')
-timestamps = @doc.xpath('//@timestamp')
-undos = @doc.xpath('//@undo')
-images = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg')
-zooms = @pan.xpath('//@timestamp')
+ins = @doc.xpath('svg/image/@in')
+outs = @doc.xpath('svg/image/@out')
+timestamps = @doc.xpath('svg/g/g/@timestamp')
+undos = @doc.xpath('svg/g/g/@undo')
+images = @doc.xpath('svg/image')
+xhtml = @doc.xpath('svg/g/g/switch/foreignObject')
+zooms = @pan.xpath('recording/event/@timestamp')
 
 intervals = (ins + outs + timestamps + undos + zooms).to_a.map(&:to_s).map(&:to_f).uniq.sort
 
 # Image paths need to follow the URI Data Scheme (for slides and polls)
 images.each do |image|
-  path = image.attr('xlink:href')
+  path = image.attr('href')
 
   # Open the image
   data = File.open(path).read
 
-  image.set_attribute('xlink:href', "data:image/#{File.extname(path).delete('.')};base64,#{Base64.encode64(data)}")
+  image.set_attribute('href', "data:image/#{File.extname(path).delete('.')};base64,#{Base64.encode64(data)}")
   image.set_attribute('style', 'visibility:visible')
 end
 
-# Convert XHTML to SVG so that text can be shown
-xhtml = @doc.xpath('//xmlns:g/xmlns:switch/xmlns:foreignObject', 'xmlns' => 'http://www.w3.org/2000/svg')
+# Make all annotations visible
+@doc.xpath('svg/g/g').each do |annotation|
+  style = annotation.attr('style')
+  style.sub! 'hidden', 'visible'
 
+  annotation.set_attribute('style', style)
+end
+
+# Convert XHTML to SVG so that text can be shown
 xhtml.each do |foreign_object|
   # Get and set style of corresponding group container
   g = foreign_object.parent.parent
@@ -79,9 +86,6 @@ xhtml.each do |foreign_object|
   foreign_object.parent.remove
 end
 
-# Creates new file to hold the timestamps of the whiteboard
-File.open('timestamps/whiteboard_timestamps', 'w') {}
-
 # Intervals with a value of -1 do not correspond to a timestamp
 intervals = intervals.drop(1) if intervals.first == -1
 
@@ -94,58 +98,43 @@ intervals.each_cons(2) do |(a, b)|
 end
 
 # Render the visible frame for each interval
-File.open('timestamps/whiteboard_timestamps', 'a') do |file|
+File.open('timestamps/whiteboard_timestamps', 'w') do |file|
   frames.each do |frame|
     interval_start = frame[0]
     interval_end = frame[1]
 
     # Query slide we're currently on
-    slide = @doc.xpath("//xmlns:image[@in <= #{interval_start} and #{interval_end} <= @out]", 'xmlns' => 'http://www.w3.org/2000/svg')
+    slide = @doc.xpath("svg/image[@in <= #{interval_start} and #{interval_end} <= @out]")
 
     # Query current viewbox parameter
-    view_box = @pan.xpath("(//event[@timestamp <= #{interval_start}]/viewBox/text())[last()]")
+    view_box = @pan.xpath("(recording/event[@timestamp <= #{interval_start}]/viewBox/text())[last()]")
 
     # Get slide information
     slide_id = slide.attr('id').to_s
-
     width = slide.attr('width').to_s
     height = slide.attr('height').to_s
-    x = slide.attr('x').to_s
-    y = slide.attr('y').to_s
 
-    draw = @doc.xpath(
-      "//xmlns:g[@class=\"canvas\" and @image=\"#{slide_id}\"]/xmlns:g[@timestamp < \"#{interval_end}\" and (@undo = \"-1\" or @undo >= \"#{interval_end}\")]", 'xmlns' => 'http://www.w3.org/2000/svg'
-    )
+    draw = @doc.xpath("svg/g[@class=\"canvas\" and @image=\"#{slide_id}\"]/g[@timestamp < \"#{interval_end}\" and (@undo = \"-1\" or @undo >= \"#{interval_end}\")]")
 
     # Builds SVG frame
     builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-      #xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
-      xml.svg(width: "1600", height: "1080", x: x, y: y, version: '1.1', viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
+      # Add 'xmlns' => 'http://www.w3.org/2000/svg' for debugging
+      xml.svg(width: "1600", height: "1080", viewBox: view_box) do
       
       # Display background image
-      xml.image('xlink:href': slide.attr('href'), width: width, height: height, preserveAspectRatio: "xMidYMid slice", x: x, y: y, style: slide.attr('style'))
+      xml.image('href': slide.attr('href'), width: width, height: height, preserveAspectRatio: "xMidYMid slice", style: slide.attr('style'))
+        
         # Add annotations
-        draw.each do |shape|
-          # Make shape visible
-          style = shape.attr('style')
-          style.sub! 'hidden', 'visible'
-
-          xml.g(style: style) do
-            xml << shape.xpath('./*').to_s
-          end
+        draw.each do |annotation|
+          xml << annotation.to_s
         end
+        
       end
     end
 
     # Saves frame as SVG file (for debugging purposes)
     # File.open("frames/frame#{frame_number}.svg", 'w') do |file|
       # file.write(builder.to_xml)
-    # end
-
-    # Writes its duration down
-    # File.open('timestamps/whiteboard_timestamps', 'a') do |file|
-      # file.puts "file ../frames/frame#{frame_number}.svg"
-      # file.puts "duration #{(interval_end - interval_start).round(1)}"
     # end
 
     # Saves frame as SVGZ file
@@ -155,26 +144,18 @@ File.open('timestamps/whiteboard_timestamps', 'a') do |file|
       svgz.close
     end
 
-    file.puts "file ../frames/frame#{frame_number}.svgz"
+    # Write the frame's duration down
+    file.puts "file ../frames/frame#{frame_number}.svg"
     file.puts "duration #{(interval_end - interval_start).round(1)}"
-
-    # Writes its duration down
-    #File.open('timestamps/whiteboard_timestamps', 'a') do |file|
-      #file.puts "file ../frames/frame#{frame_number}.svgz"
-      #file.puts "duration #{(interval_end - interval_start).round(1)}"
-    # end
 
     frame_number += 1
     # puts frame_number
   end
-end
 
-# The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
-File.open('timestamps/whiteboard_timestamps', 'a') do |file|
-  file.puts "file ../frames/frame#{frame_number - 1}.svgz"
+  # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
+  file.puts "file ../frames/frame#{frame_number - 1}.svgz" if frame_number.positive?
 end
 
 # Benchmark
 finish = Time.now
-
 puts finish - start

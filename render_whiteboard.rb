@@ -67,10 +67,6 @@ shape_reader.each do |node|
   end
 end
 
-# XPath queries for the images and text fields
-# images = @doc.xpath('svg/image')
-xhtml = @doc.xpath('svg/g/g/switch/foreignObject')
-
 intervals = reader_timestamps.uniq.sort
 
 # Make necessary changes to shapes.svg
@@ -88,48 +84,48 @@ intervals = reader_timestamps.uniq.sort
   end
 
   # Convert XHTML to SVG so that text can be shown
-end
+  if annotation.attribute('shape').to_s.include? 'text' then
 
-# Convert XHTML to SVG so that text can be shown
-xhtml.each do |foreign_object|
-  # Get and set style of corresponding group container
-  g = foreign_object.parent.parent
-  g_style = g.attr('style')
-  g.set_attribute('style', "#{g_style};fill:currentcolor")
+    # Change text style so color is rendered
+    text_style = annotation.attr('style')
+    annotation.set_attribute('style', "#{text_style};fill:currentcolor")
 
-  text = foreign_object.children.children
+    foreign_object = annotation.xpath('switch/foreignObject')
 
-  # Obtain X and Y coordinates of the text
-  x = foreign_object.attr('x').to_s
-  y = foreign_object.attr('y').to_s
+    # Obtain X and Y coordinates of the text
+    x = foreign_object.attr('x').to_s
+    y = foreign_object.attr('y').to_s
 
-  # Preserve the whitespace (seems to be ignored by FFmpeg)
-  svg = "<text x=\"#{x}\" y=\"#{y}\" xml:space=\"preserve\">"
+    # Preserve the whitespace
+    svg = "<text x=\"#{x}\" y=\"#{y}\" xml:space=\"preserve\">"
 
-  # Add line breaks as <tspan> elements
-  text.each do |line|
-    if line.to_s == "<br/>"
+    text = foreign_object.children.children
 
-      svg += "<tspan x=\"#{x}\" dy=\"0.9em\"><br/></tspan>"
+    # Add line breaks as <tspan> elements
+    text.each do |line|
+      if line.to_s == "<br/>"
+        svg += "<tspan x=\"#{x}\" dy=\"0.9em\"><br/></tspan>"
+      
+      else
 
-    else
+        # Make a new line every 40 characters (arbitrary value, SVG does not support auto wrap)
+        line_breaks = line.to_s.chars.each_slice(40).map(&:join)
 
-      # Make a new line every 40 characters (arbitrary value, SVG does not support auto wrap)
-      line_breaks = line.to_s.chars.each_slice(40).map(&:join)
+        line_breaks.each do |row|
+          svg += "<tspan x=\"#{x}\" dy=\"0.9em\">#{row}</tspan>"
+        end
 
-      line_breaks.each do |row|
-        svg += "<tspan x=\"#{x}\" dy=\"0.9em\">#{row}</tspan>"
-      end
-
+        end
     end
+
+    svg += "</text>"
+
+    annotation.add_child(svg)
+
+    # Remove the <switch> tag
+    annotation.xpath('switch').remove
   end
 
-  svg += "</text>"
-
-  g.add_child(svg)
-
-  # Remove the <switch> tag
-  foreign_object.parent.remove
 end
 
 # Intervals with a value of -1 do not correspond to a timestamp

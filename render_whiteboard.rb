@@ -10,6 +10,7 @@ start = Time.now
 
 # Opens shapes.svg
 @doc = Nokogiri::XML(File.open('shapes.svg')).remove_namespaces!
+shape_reader = Nokogiri::XML::Reader(File.open('shapes.svg'))
 
 # Opens panzooms.xml
 pan_reader = Nokogiri::XML::Reader(File.open('panzooms.xml'))
@@ -17,28 +18,43 @@ pan_reader = Nokogiri::XML::Reader(File.open('panzooms.xml'))
 view_boxes = []
 reader_timestamps = []
 
+# Parse recording intervals
 pan_reader.each do |node|
-  if node.name == 'event' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
-    reader_timestamps << node.attribute('timestamp').to_f
-  end
+  if node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
+    if node.name == 'event' then
+      reader_timestamps << node.attribute('timestamp').to_f
+    end
   
-  if node.name == 'viewBox' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
-    view_boxes << node.inner_xml
+    if node.name == 'viewBox' then
+      view_boxes << node.inner_xml
+    end
   end
 end
 
 # Get array containing [panzoom timestamp, view_box parameter]
 panzooms = reader_timestamps.zip(view_boxes)
 
-# Get intervals to display the frames
-ins = @doc.xpath('svg/image/@in')
-outs = @doc.xpath('svg/image/@out')
-timestamps = @doc.xpath('svg/g/g/@timestamp')
-undos = @doc.xpath('svg/g/g/@undo')
+shape_reader.each do |node|
+  if node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
+    
+    if node.name == 'image' then
+      reader_timestamps << node.attribute('in').to_f
+      reader_timestamps << node.attribute('out').to_f
+
+    end
+
+    if node.name == 'g' && node.attribute('class') == "shape" then
+      reader_timestamps << node.attribute('timestamp').to_f
+      reader_timestamps << node.attribute('undo').to_f
+    end
+  end
+end
+
+# XPath queries for the images and text fields
 images = @doc.xpath('svg/image')
 xhtml = @doc.xpath('svg/g/g/switch/foreignObject')
 
-intervals = (ins + outs + timestamps + undos).to_a.map(&:to_s).map(&:to_f).concat(reader_timestamps).uniq.sort
+intervals = reader_timestamps.uniq.sort
 
 # Image paths need to follow the URI Data Scheme (for slides and polls)
 images.each do |image|
@@ -155,9 +171,9 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     end
 
     # Saves frame as SVG file (for debugging purposes)
-    # File.open("frames/frame#{frame_number}.svg", 'w') do |file|
-      # file.write(builder.to_xml)
-    # end
+    File.open("frames/frame#{frame_number}.svg", 'w') do |file|
+      file.write(builder.to_xml)
+    end
 
     # Saves frame as SVGZ file
     File.open("frames/frame#{frame_number}.svgz", 'w') do |file|

@@ -5,6 +5,12 @@ require 'nokogiri'
 require 'base64'
 require 'zlib'
 
+def base64_encode(path)
+  data = File.open(path).read
+  data = "data:image/#{File.extname(path).delete('.')};base64,#{Base64.encode64(data)}"
+  return data
+end
+
 # Track how long the code is taking
 start = Time.now
 
@@ -17,12 +23,15 @@ pan_reader = Nokogiri::XML::Reader(File.open('panzooms.xml'))
 
 view_boxes = []
 reader_timestamps = []
+slides = []
 
 # Parse recording intervals
 pan_reader.each do |node|
   if node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
     if node.name == 'event' then
+
       reader_timestamps << node.attribute('timestamp').to_f
+
     end
   
     if node.name == 'viewBox' then
@@ -38,8 +47,16 @@ shape_reader.each do |node|
   if node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
     
     if node.name == 'image' then
-      reader_timestamps << node.attribute('in').to_f
-      reader_timestamps << node.attribute('out').to_f
+      
+      slide_in = node.attribute('in').to_f
+      slide_out = node.attribute('out').to_f
+
+      reader_timestamps << slide_in
+      reader_timestamps << slide_out
+
+      # Image paths need to follow the URI Data Scheme (for slides and polls)
+      path = node.attribute('xlink:href')
+      slides << [node.attribute('id').to_s, base64_encode(path), slide_in, slide_out, node.attribute('width').to_f, node.attribute('height')]
 
     end
 
@@ -51,28 +68,26 @@ shape_reader.each do |node|
 end
 
 # XPath queries for the images and text fields
-images = @doc.xpath('svg/image')
+# images = @doc.xpath('svg/image')
 xhtml = @doc.xpath('svg/g/g/switch/foreignObject')
 
 intervals = reader_timestamps.uniq.sort
 
-# Image paths need to follow the URI Data Scheme (for slides and polls)
-images.each do |image|
-  path = image.attr('href')
-
-  # Open the image
-  data = File.open(path).read
-
-  image.set_attribute('href', "data:image/#{File.extname(path).delete('.')};base64,#{Base64.encode64(data)}")
-  image.set_attribute('style', 'visibility:visible')
-end
-
-# Make all annotations visible
+# Make necessary changes to shapes.svg
 @doc.xpath('svg/g/g').each do |annotation|
+  # Make all annotations visible
   style = annotation.attr('style')
   style.sub! 'hidden', 'visible'
-
   annotation.set_attribute('style', style)
+
+  # Convert polls to data schema
+  if annotation.attribute('shape').to_s.include? 'poll' then
+    poll = annotation.element_children.first
+    path = poll.attribute('href')
+    poll.set_attribute('href', base64_encode(path))
+  end
+
+  # Convert XHTML to SVG so that text can be shown
 end
 
 # Convert XHTML to SVG so that text can be shown
@@ -135,7 +150,7 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     interval_end = frame[1]
 
     # Query slide we're currently on
-    slide = @doc.xpath("svg/image[@in <= #{interval_start} and #{interval_end} <= @out]")
+    # slide = @doc.xpath("svg/image[@in <= #{interval_start} and #{interval_end} <= @out]")
 
     # Query current viewbox parameter
     # view_box = @pan.xpath("(recording/event[@timestamp <= #{interval_start}]/viewBox/text())[last()]")
@@ -148,24 +163,33 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     view_box = panzooms.first[1]
 
     # Get slide information
-    slide_id = slide.attr('id').to_s
-    width = slide.attr('width').to_s
-    height = slide.attr('height').to_s
+    slide = slides.find_index { |_, _, slide_in, slide_out, _, _| slide_in <= interval_start && interval_end <= slide_out}
+
+    slide_id = slides[slide][0]
+    slide_href = slides[slide][1]
+    width = slides[slide][4]
+    height = slides[slide][5]
 
     draw = @doc.xpath("svg/g[@class=\"canvas\" and @image=\"#{slide_id}\"]/g[@timestamp < \"#{interval_end}\" and (@undo = \"-1\" or @undo >= \"#{interval_end}\")]")
+
+    draw.remove_attribute('id')
+    draw.remove_attribute('class')
+    draw.remove_attribute('shape')
+
+    # Timestamp and undo are not needed, but are kept as it otherwise deletes most nodes somehow
+    # draw.remove_attribute('timestamp')
+    # draw.remove_attribute('undo')
 
     # Builds SVG frame
     builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
       # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
-      xml.svg(width: "1600", height: "1080", viewBox: view_box) do
+      xml.svg(width: "1600", height: "1080", viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg') do
       
       # Display background image
-      xml.image('href': slide.attr('href'), width: width, height: height, preserveAspectRatio: "xMidYMid slice", style: slide.attr('style'))
-        
-        # Add annotations
-        draw.each do |annotation|
-          xml << annotation.to_s
-        end
+      xml.image('href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
+      
+      # Adds annotations
+      xml << draw.to_s
         
       end
     end
@@ -176,14 +200,14 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     end
 
     # Saves frame as SVGZ file
-    File.open("frames/frame#{frame_number}.svgz", 'w') do |file|
-      svgz = Zlib::GzipWriter.new(file)
-      svgz.write(builder.to_xml)
-      svgz.close
-    end
+    # File.open("frames/frame#{frame_number}.svgz", 'w') do |file|
+      # svgz = Zlib::GzipWriter.new(file)
+      # svgz.write(builder.to_xml)
+      # svgz.close
+    # end
 
     # Write the frame's duration down
-    file.puts "file ../frames/frame#{frame_number}.svgz"
+    file.puts "file ../frames/frame#{frame_number}.svg"
     file.puts "duration #{(interval_end - interval_start).round(1)}"
 
     frame_number += 1

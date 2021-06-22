@@ -15,65 +15,13 @@ end
 start = Time.now
 
 # Opens shapes.svg
-@doc = Nokogiri::XML(File.open('shapes.svg')).remove_namespaces!
-shape_reader = Nokogiri::XML::Reader(File.open('shapes.svg'))
-
-# Opens panzooms.xml
-pan_reader = Nokogiri::XML::Reader(File.open('panzooms.xml'))
-
-view_boxes = []
-reader_timestamps = []
-slides = []
-
-# Parse recording intervals
-pan_reader.each do |node|
-  if node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
-    if node.name == 'event' then
-
-      reader_timestamps << node.attribute('timestamp').to_f
-
-    end
-  
-    if node.name == 'viewBox' then
-      view_boxes << node.inner_xml
-    end
-  end
-end
-
-# Get array containing [panzoom timestamp, view_box parameter]
-panzooms = reader_timestamps.zip(view_boxes)
-
-shape_reader.each do |node|
-  if node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
-    
-    if node.name == 'image' then
-      
-      slide_in = node.attribute('in').to_f
-      slide_out = node.attribute('out').to_f
-
-      reader_timestamps << slide_in
-      reader_timestamps << slide_out
-
-      # Image paths need to follow the URI Data Scheme (for slides and polls)
-      path = node.attribute('xlink:href')
-      slides << [node.attribute('id').to_s, base64_encode(path), slide_in, slide_out, node.attribute('width').to_f, node.attribute('height')]
-
-    end
-
-    if node.name == 'g' && node.attribute('class') == "shape" then
-      reader_timestamps << node.attribute('timestamp').to_f
-      reader_timestamps << node.attribute('undo').to_f
-    end
-  end
-end
-
-intervals = reader_timestamps.uniq.sort
+doc = Nokogiri::XML(File.open('shapes.svg')).remove_namespaces!
 
 # Make necessary changes to shapes.svg
-@doc.xpath('svg/g/g').each do |annotation|
+doc.xpath('svg/g/g').each do |annotation|
   # Make all annotations visible
   style = annotation.attr('style')
-  style.sub! 'hidden', 'visible'
+  style.sub! 'visibility:hidden', ''
   annotation.set_attribute('style', style)
 
   # Convert polls to data schema
@@ -125,8 +73,72 @@ intervals = reader_timestamps.uniq.sort
     # Remove the <switch> tag
     annotation.xpath('switch').remove
   end
-
 end
+
+# Save new shapes.svg copy
+File.open("shapes_modified.svg", 'w') do |file|
+  file.write(doc)
+end
+
+# SVG / XML readers for shapes and panzooms
+shape_reader = Nokogiri::XML::Reader(File.open('shapes_modified.svg'))
+pan_reader = Nokogiri::XML::Reader(File.open('panzooms.xml'))
+
+view_boxes = []
+reader_timestamps = []
+slides = []
+shapes = []
+
+# Parse recording intervals
+pan_reader.each do |node|
+  if node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
+    if node.name == 'event' then
+
+      reader_timestamps << node.attribute('timestamp').to_f
+
+    end
+  
+    if node.name == 'viewBox' then
+      view_boxes << node.inner_xml
+    end
+  end
+end
+
+# Get array containing [panzoom timestamp, view_box parameter]
+panzooms = reader_timestamps.zip(view_boxes)
+
+shape_reader.each do |node|
+  if node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT then
+    
+    if node.name == 'image' && node.attribute('class') == 'slide' then
+      
+      slide_in = node.attribute('in').to_f
+      slide_out = node.attribute('out').to_f
+
+      reader_timestamps << slide_in
+      reader_timestamps << slide_out
+
+      # Image paths need to follow the URI Data Scheme (for slides and polls)
+      path = node.attribute('href')
+      slides << [node.attribute('id').to_s, base64_encode(path), slide_in, slide_out, node.attribute('width').to_f, node.attribute('height')]
+
+    end
+
+    if node.name == 'g' && node.attribute('class') == "shape" then
+      
+      shape_timestamp = node.attribute('timestamp').to_f
+      shape_undo = node.attribute('undo').to_f
+      shape_id = node.attribute('id').split('-').first
+
+      reader_timestamps << shape_timestamp
+      reader_timestamps << shape_undo
+
+      shapes << [shape_id, shape_timestamp, shape_undo, node.attribute('style'), node.inner_xml]
+    end
+  end
+end
+
+intervals = reader_timestamps.uniq.sort
 
 # Intervals with a value of -1 do not correspond to a timestamp
 intervals = intervals.drop(1) if intervals.first == -1
@@ -163,30 +175,29 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
 
     slide_id = slides[slide][0]
     slide_href = slides[slide][1]
+    slide_out = slides[slide][3]
     width = slides[slide][4]
     height = slides[slide][5]
+    
+    draw = shapes.select { |id, t, undo, _, _| id == slide_id && t < interval_end && (undo == -1 || undo >= interval_end)}
 
-    draw = @doc.xpath("svg/g[@class=\"canvas\" and @image=\"#{slide_id}\"]/g[@timestamp < \"#{interval_end}\" and (@undo = \"-1\" or @undo >= \"#{interval_end}\")]")
-
-    draw.remove_attribute('id')
-    draw.remove_attribute('class')
-    draw.remove_attribute('shape')
-
-    # Timestamp and undo are not needed, but are kept as it otherwise deletes most nodes somehow
-    # draw.remove_attribute('timestamp')
-    # draw.remove_attribute('undo')
+    # draw = @doc.xpath("svg/g[@class=\"canvas\" and @image=\"#{slide_id}\"]/g[@timestamp < \"#{interval_end}\" and (@undo = \"-1\" or @undo >= \"#{interval_end}\")]")
 
     # Builds SVG frame
     builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
       # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
       xml.svg(width: "1600", height: "1080", viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg') do
       
-      # Display background image
-      xml.image('href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
+        # Display background image
+        xml.image('href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
       
-      # Adds annotations
-      xml << draw.to_s
-        
+        # Adds annotations
+        draw.each do |annotation|
+          xml.g('style': annotation[3]) do
+            xml << annotation[4]
+          end 
+        end
+
       end
     end
 
@@ -207,11 +218,21 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     file.puts "duration #{(interval_end - interval_start).round(1)}"
 
     frame_number += 1
-    # puts frame_number
+
+    # Remove canvas once we're done with it
+    if slide_out == interval_end && !draw.empty? then
+
+      next_canvas = shapes.find_index {|id, _, _, _, _| slide_id != id}
+      next_canvas = 0 if next_canvas.nil?
+
+      shapes = shapes.slice!(next_canvas, shapes.length - 1)
+
+    end
+
   end
 
   # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
-  file.puts "file ../frames/frame#{frame_number - 1}.svgz" if frame_number.positive?
+  file.puts "file ../frames/frame#{frame_number - 1}.svg" if frame_number.positive?
 end
 
 # Benchmark

@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-# frozen_string_literal: true
+# frozen_string_literal: false
 
 require 'nokogiri'
 require 'base64'
@@ -60,13 +60,13 @@ doc.xpath('svg/g/g').each do |annotation|
         line_breaks = line.to_s.chars.each_slice(40).map(&:join)
 
         line_breaks.each do |row|
-          svg += "<tspan x=\"#{x}\" dy=\"0.9em\">#{row}</tspan>"
+          svg << "<tspan x=\"#{x}\" dy=\"0.9em\">#{row}</tspan>"
         end
 
         end
     end
 
-    svg += "</text>"
+    svg << "</text>"
 
     annotation.add_child(svg)
 

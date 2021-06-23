@@ -51,7 +51,7 @@ doc.xpath('svg/g/g').each do |annotation|
   # Add line breaks as <tspan> elements
   text.each do |line|
     if line.to_s == "<br/>"
-      svg += "<tspan x=\"#{x}\" dy=\"0.9em\"><br/></tspan>"
+      svg << "<tspan x=\"#{x}\" dy=\"0.9em\"><br/></tspan>"
 
     else
 

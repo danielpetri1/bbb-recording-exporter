@@ -124,7 +124,8 @@ shape_reader.each do |node|
   reader_timestamps << shape_timestamp
   reader_timestamps << shape_undo
 
-  shapes << [shape_id, shape_timestamp, shape_undo, node.attribute('style'), node.inner_xml]
+  xml  = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>" 
+  shapes << [shape_id, shape_timestamp, shape_undo, xml]
 end
 
 intervals = reader_timestamps.uniq.sort
@@ -168,7 +169,7 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     width = slides[slide][4]
     height = slides[slide][5]
 
-    draw = shapes.select { |id, t, undo, _, _| id == slide_id && t < interval_end && (undo == -1 || undo >= interval_end) }
+    draw = shapes.select { |id, t, undo, _| id == slide_id && t < interval_end && (undo == -1 || undo >= interval_end) }
 
     # draw = @doc.xpath("svg/g[@class=\"canvas\" and @image=\"#{slide_id}\"]/g[@timestamp < \"#{interval_end}\" and (@undo = \"-1\" or @undo >= \"#{interval_end}\")]")
 
@@ -180,11 +181,10 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
         xml.image(href: slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
 
         # Adds annotations
-        draw.each do |annotation|
-          xml.g(style: annotation[3]) do
-            xml << annotation[4]
-          end
+        draw.each do |_, _, _, g|
+          xml << g
         end
+
       end
     end
 

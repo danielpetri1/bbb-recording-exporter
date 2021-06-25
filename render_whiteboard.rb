@@ -132,6 +132,9 @@ def parse_panzooms(pan_reader)
 end
 
 def parse_whiteboard_shapes(shape_reader)
+  slide_in = 0
+  slide_out = 0
+
   timestamps = []
   slides = []
   shapes = []
@@ -159,11 +162,16 @@ def parse_whiteboard_shapes(shape_reader)
     shape_undo = node.attribute('undo').to_f
     shape_id = node.attribute('id').split('-').first
     
-    timestamps << shape_timestamp
-    timestamps << shape_undo
+    shape_undo = slide_out if shape_undo.negative?
+
+    shape_enter = [[shape_timestamp, slide_in].max, slide_out].min
+    shape_leave = [[shape_undo, slide_in].max, slide_out].min
+
+    timestamps << shape_enter
+    timestamps << shape_leave
   
     xml  = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>" 
-    shapes << [shape_id, shape_timestamp, shape_undo, xml]
+    shapes << [shape_id, shape_enter, shape_leave, xml]
   end
 
   return timestamps, slides, shapes
@@ -178,7 +186,7 @@ doc = Nokogiri::XML(File.open('shapes.svg')).remove_namespaces!
 convert_whiteboard_shapes(doc)
 
 # Parse the converted whiteboard shapes
-@timestamps, slides, @shapes = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open('shapes_modified.svg')))
+@timestamps, slides, shapes = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open('shapes_modified.svg')))
 
 # Slide panzooms as array containing [panzoom timestamp, view_box parameter]
 panzooms = parse_panzooms(Nokogiri::XML::Reader(File.open('panzooms.xml')))
@@ -194,14 +202,12 @@ intervals.each_cons(2) do |(a, b)|
   frames << [a, b]
 end
 
-# Thread queue
-jobs = Queue.new
-
 # Render the visible frame for each interval
 File.open('timestamps/whiteboard_timestamps', 'w') do |file|
   
   # Example slide to instanciate variables
   slide_id, width, height, view_box, slide_href = ['image1', 1600, 900, '0 0 1600 900', 'deskshare/deskshare.png']
+  canvas = []
   
   file_extension = "svg"
   if SVGZ_COMPRESSION then file_extension = "svgz" end
@@ -215,10 +221,21 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     end
 
     if !slides.empty? && interval_start >= slides.first[2] then
+      canvas = []
       slide_id, slide_href, _, _, width, height = slides.shift
+
+      next_canvas = shapes.find_index { |id, _, _, _| id > slide_id }
+      next_canvas = shapes.count if next_canvas.nil?
+
+      #canvas = shapes.take(next_canvas)
+      next_canvas.times do
+        canvas << shapes.shift
+      end
+
+      #puts shapes.length
     end
 
-    draw = @shapes.select { |id, t, undo, _| id == slide_id && t < interval_end && (undo == -1 || undo >= interval_end) }
+    draw = canvas.select { |_, enter, leave, _| enter < interval_end && leave >= interval_end}
 
     svg_export(draw, view_box, slide_href, width, height, frame_number)
 

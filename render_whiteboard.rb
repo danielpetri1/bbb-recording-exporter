@@ -224,18 +224,18 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
       canvas = []
       slide_id, slide_href, _, _, width, height = slides.shift
 
-      next_canvas = shapes.find_index { |id, _, _, _| id > slide_id }
-      next_canvas = shapes.count if next_canvas.nil?
+      #next_canvas = shapes.find_index { |id, _, _, _| id > slide_id }
+      #next_canvas = shapes.count if next_canvas.nil?
 
       #canvas = shapes.take(next_canvas)
-      next_canvas.times do
-        canvas << shapes.shift
-      end
+      #next_canvas.times do
+        #canvas << shapes.shift
+      #end
 
       #puts shapes.length
     end
 
-    draw = canvas.select { |_, enter, leave, _| enter < interval_end && leave >= interval_end}
+    draw = shapes.select { |_, enter, leave, _| enter < interval_end && leave >= interval_end}
 
     svg_export(draw, view_box, slide_href, width, height, frame_number)
 

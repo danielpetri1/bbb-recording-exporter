@@ -133,7 +133,17 @@ shape_reader.each do |node|
   shape_enter = [[shape_timestamp, slide_in].max, slide_out].min
   shape_leave = [[shape_undo, slide_in].max, slide_out].min
 
-  xml = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>"
+  # Itree unfortunately does not return multiple matches for the same interval 
+  update = shapes_interval_tree.stab(shape_enter, shape_leave)
+
+  xml = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>"  
+
+  update.each do |annotation|
+    if annotation.scores[0] == shape_enter && annotation.scores[1] == shape_leave then
+      xml << annotation.data
+      shapes_interval_tree.remove(shape_enter, shape_leave)
+    end
+  end
 
   shapes_interval_tree.insert(shape_enter, shape_leave, xml) if shape_enter < shape_leave
 end

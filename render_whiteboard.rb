@@ -14,7 +14,6 @@ def base64_encode(path)
 end
 
 def svg_export(draw, view_box, slide_href, width, height, frame_number)
-
   # Builds SVG frame
   builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
     # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
@@ -26,11 +25,10 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
       draw.each do |_, _, _, g|
         xml << g
       end
-
     end
   end
 
-  if SVGZ_COMPRESSION then
+  if SVGZ_COMPRESSION
     # Saves frame as SVGZ file
     File.open("frames/frame#{frame_number}.svgz", 'w') do |file|
       svgz = Zlib::GzipWriter.new(file)
@@ -48,7 +46,6 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
 end
 
 def convert_whiteboard_shapes(doc)
-  
   # Find shape elements
   doc.xpath('svg/g/g').each do |annotation|
     # Make all annotations visible
@@ -57,7 +54,7 @@ def convert_whiteboard_shapes(doc)
     annotation.set_attribute('style', style)
 
     # Convert polls to data schema
-    if annotation.attribute('shape').to_s.include? 'poll' then
+    if annotation.attribute('shape').to_s.include? 'poll'
       poll = annotation.element_children.first
       path = poll.attribute('href')
       poll.set_attribute('href', base64_encode(path))
@@ -87,7 +84,7 @@ def convert_whiteboard_shapes(doc)
         svg << "<tspan x=\"#{x}\" dy=\"0.9em\"><br/></tspan>"
 
       else
-        
+
       # Make a new line every 40 characters (arbitrary value, SVG does not support auto wrap)
       line_breaks = line.to_s.chars.each_slice(40).map(&:join)
 
@@ -110,7 +107,6 @@ def convert_whiteboard_shapes(doc)
   File.open("shapes_modified.svg", 'w') do |file|
     file.write(doc)
   end
-
 end
 
 def parse_panzooms(pan_reader)
@@ -119,16 +115,16 @@ def parse_panzooms(pan_reader)
 
   pan_reader.each do |node|
     next unless node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
-    
+
     timestamp = node.attribute('timestamp').to_f if node.name == 'event'
-    
-    if node.name == 'viewBox' then
+
+    if node.name == 'viewBox'
       panzooms << [timestamp, node.inner_xml]
       @timestamps << timestamp
     end
   end
 
-  return panzooms
+  panzooms
 end
 
 def parse_whiteboard_shapes(shape_reader)
@@ -141,27 +137,27 @@ def parse_whiteboard_shapes(shape_reader)
 
   shape_reader.each do |node|
     next unless node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
-  
+
     if node.name == 'image' && node.attribute('class') == 'slide'
-  
+
       slide_in = node.attribute('in').to_f
       slide_out = node.attribute('out').to_f
-  
+
       timestamps << slide_in
       timestamps << slide_out
-  
+
       # Image paths need to follow the URI Data Scheme (for slides and polls)
       path = node.attribute('href')
       slides << [node.attribute('id').to_s, base64_encode(path), slide_in, slide_out, node.attribute('width').to_f, node.attribute('height')]
-  
+
     end
-  
+
     next unless node.name == 'g' && node.attribute('class') == "shape"
-  
+
     shape_timestamp = node.attribute('timestamp').to_f
     shape_undo = node.attribute('undo').to_f
     shape_id = node.attribute('id').split('-').first
-    
+
     shape_undo = slide_out if shape_undo.negative?
 
     shape_enter = [[shape_timestamp, slide_in].max, slide_out].min
@@ -169,12 +165,12 @@ def parse_whiteboard_shapes(shape_reader)
 
     timestamps << shape_enter
     timestamps << shape_leave
-  
-    xml  = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>" 
+
+    xml = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>"
     shapes << [shape_id, shape_enter, shape_leave, xml]
   end
 
-  return timestamps, slides, shapes
+  [timestamps, slides, shapes]
 end
 
 # Track how long the code is taking
@@ -204,38 +200,39 @@ end
 
 # Render the visible frame for each interval
 File.open('timestamps/whiteboard_timestamps', 'w') do |file|
-  
   # Example slide to instanciate variables
-  slide_id, width, height, view_box, slide_href = ['image1', 1600, 900, '0 0 1600 900', 'deskshare/deskshare.png']
+  slide_id = 'image1'
+  width = 1600
+  height = 900
+  view_box = '0 0 1600 900'
+  slide_href = 'deskshare/deskshare.png'
   canvas = []
-  
+
   file_extension = "svg"
-  if SVGZ_COMPRESSION then file_extension = "svgz" end
+  file_extension = "svgz" if SVGZ_COMPRESSION
 
   frames.each do |frame|
     interval_start, interval_end = frame
 
     # Get view_box parameter of the current slide
-    if !panzooms.empty? && interval_start >= panzooms.first.first then
-      _, view_box = panzooms.shift
-    end
+    _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
 
-    if !slides.empty? && interval_start >= slides.first[2] then
+    if !slides.empty? && interval_start >= slides.first[2]
       canvas = []
       slide_id, slide_href, _, _, width, height = slides.shift
 
-      #next_canvas = shapes.find_index { |id, _, _, _| id > slide_id }
-      #next_canvas = shapes.count if next_canvas.nil?
+      # next_canvas = shapes.find_index { |id, _, _, _| id > slide_id }
+      # next_canvas = shapes.count if next_canvas.nil?
 
-      #canvas = shapes.take(next_canvas)
-      #next_canvas.times do
-        #canvas << shapes.shift
-      #end
+      # canvas = shapes.take(next_canvas)
+      # next_canvas.times do
+      # canvas << shapes.shift
+      # end
 
-      #puts shapes.length
+      # puts shapes.length
     end
 
-    draw = shapes.select { |_, enter, leave, _| enter < interval_end && leave >= interval_end}
+    draw = shapes.select { |_, enter, leave, _| enter < interval_end && leave >= interval_end }
 
     svg_export(draw, view_box, slide_href, width, height, frame_number)
 

@@ -12,6 +12,7 @@
 !timestamps/
 !chats/
 !cursor/
+!lib/
 !render_whiteboard.rb
 !download_client.rb
 !render_video.rb

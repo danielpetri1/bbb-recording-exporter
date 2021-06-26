@@ -4,9 +4,12 @@
 require 'nokogiri'
 require 'base64'
 require 'zlib'
+require 'builder'
 
 # Options
 SVGZ_COMPRESSION = false
+
+FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 
 def base64_encode(path)
   data = File.open(path).read
@@ -15,33 +18,27 @@ end
 
 def svg_export(draw, view_box, slide_href, width, height, frame_number)
   # Builds SVG frame
-  builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-    # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
-    xml.svg(width: "1600", height: "1080", viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg') do
-      # Display background image
-      xml.image(href: slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
+  builder = Builder::XmlMarkup.new
+  # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging, remove for faster exports
+  builder.svg(width: "1600", height: "1080", viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg') do
+    # Display background image
+    builder.image(href: slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
 
-      # Adds annotations
-      draw.each do |_, _, _, g|
-        xml << g
-      end
+    # Adds annotations
+    draw.each do |_, _, _, g|
+      builder << g
     end
   end
 
-  if SVGZ_COMPRESSION
-    # Saves frame as SVGZ file
-    File.open("frames/frame#{frame_number}.svgz", 'w') do |file|
-      svgz = Zlib::GzipWriter.new(file)
-      svgz.write(builder.to_xml)
+  File.open("frames/frame#{frame_number}.#{FILE_EXTENSION}", "w") do |svg|
+    if SVGZ_COMPRESSION
+      svgz = Zlib::GzipWriter.new(svg)
+      svgz.write(builder.target!)
       svgz.close
-    end
 
-  else
-    # Saves frame as SVG file
-    File.open("frames/frame#{frame_number}.svg", 'w') do |svg|
-      svg.write(builder.to_xml)
+    else
+      svg.write(builder.target!)
     end
-
   end
 end
 
@@ -208,9 +205,6 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
   slide_href = 'deskshare/deskshare.png'
   canvas = []
 
-  file_extension = "svg"
-  file_extension = "svgz" if SVGZ_COMPRESSION
-
   frames.each do |frame|
     interval_start, interval_end = frame
 
@@ -220,16 +214,6 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     if !slides.empty? && interval_start >= slides.first[2]
       canvas = []
       slide_id, slide_href, _, _, width, height = slides.shift
-
-      # next_canvas = shapes.find_index { |id, _, _, _| id > slide_id }
-      # next_canvas = shapes.count if next_canvas.nil?
-
-      # canvas = shapes.take(next_canvas)
-      # next_canvas.times do
-      # canvas << shapes.shift
-      # end
-
-      # puts shapes.length
     end
 
     draw = shapes.select { |_, enter, leave, _| enter < interval_end && leave >= interval_end }
@@ -237,7 +221,7 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     svg_export(draw, view_box, slide_href, width, height, frame_number)
 
     # Write the frame's duration down
-    file.puts "file ../frames/frame#{frame_number}.#{file_extension}"
+    file.puts "file ../frames/frame#{frame_number}.#{FILE_EXTENSION}"
     file.puts "duration #{(interval_end - interval_start).round(1)}"
 
     frame_number += 1

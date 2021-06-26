@@ -203,7 +203,6 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
   height = 900
   view_box = '0 0 1600 900'
   slide_href = 'deskshare/deskshare.png'
-  canvas = []
 
   frames.each do |frame|
     interval_start, interval_end = frame
@@ -212,7 +211,6 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
 
     if !slides.empty? && interval_start >= slides.first[2]
-      canvas = []
       slide_id, slide_href, _, _, width, height = slides.shift
     end
 

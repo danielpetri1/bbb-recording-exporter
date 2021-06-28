@@ -5,26 +5,10 @@ require 'nokogiri'
 require 'base64'
 require 'zlib'
 require 'builder'
-require 'digest'
 
 require_relative 'lib/interval_tree'
 include IntervalTree
 
-
-# for frame_number in 0..9224 do
-#   sha1 = Digest::SHA1.file "frames/frame#{frame_number}REC.svg"
-#   sha2 = Digest::SHA1.file "frames/frame#{frame_number}ITER.svg"
-
-#   if sha1 != sha2 then
-#     puts "FAILED for #{frame_number}"
-#     puts sha1
-#     puts sha2
-#   end
-
-# end
-# puts "All other files equal"
-# i = 1/0
-# Track how long the code is taking
 start = Time.now
 
 # Flags
@@ -33,6 +17,7 @@ SVGZ_COMPRESSION = false
 FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 
 WhiteboardElement = Struct.new(:begin, :end, :value)
+WhiteboardSlide = Struct.new(:href, :begin, :width, :height)
 
 def base64_encode(path)
   data = File.open(path).read
@@ -162,13 +147,13 @@ def parse_whiteboard_shapes(shape_reader)
 
       slide_in = node.attribute('in').to_f
       slide_out = node.attribute('out').to_f
-
-      timestamps << slide_in
-      timestamps << slide_out
+      
+      timestamps << node.attribute('in').to_f
+      timestamps << node.attribute('out').to_f
 
       # Image paths need to follow the URI Data Scheme (for slides and polls)
       path = node.attribute('href')
-      slides << [base64_encode(path), slide_in, slide_out, node.attribute('width').to_f, node.attribute('height')]
+      slides << WhiteboardSlide.new(base64_encode(path), slide_in, node.attribute('width').to_f, node.attribute('height'))
 
     end
 
@@ -232,11 +217,17 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     # Get view_box parameter of the current slide
     _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
 
-    if !slides.empty? && interval_start >= slides.first[1]
-      slide_href, _, _, width, height = slides.shift
+    if !slides.empty? && interval_start >= slides.first.begin
+      slide = slides.shift
+
+      slide_href = slide.href
+      width = slide.width
+      height = slide.height
     end
 
     draw = shapes_interval_tree.search(interval_start, unique: false)
+    draw = [] if draw.nil?
+
     svg_export(draw, view_box, slide_href, width, height, frame_number)
 
     # Write the frame's duration down

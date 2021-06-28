@@ -1,4 +1,4 @@
-# No deskshare - mouse overlay method
+# No deskshare
 ffmpeg -f lavfi -i color=c=white:s=1920x1080 \
     -f concat -safe 0 -i timestamps/whiteboard_timestamps \
     -framerate 10 -loop 1 -i cursor/cursor.svg \

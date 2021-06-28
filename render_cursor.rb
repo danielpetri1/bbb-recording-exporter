@@ -20,9 +20,10 @@
 # with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 #
 
-require "trollop"
+require 'trollop'
 require 'nokogiri'
-require 'zlib'
+require 'builder'
+
 require File.expand_path('../../../lib/recordandplayback', __FILE__)
 
 opts = Trollop.options do
@@ -42,80 +43,82 @@ published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
 # Main code
 #
 
-# Track how long the code is taking
 start = Time.now
 
-BigBlueButton.logger.info("Starting render_cursor.rb for [#{meeting_id}]")
-
 # Opens cursor.xml and shapes.svg
-@doc = Nokogiri::XML(File.open("#{published_files}/cursor.xml"))
-@img = Nokogiri::XML(File.open("#{published_files}/shapes.svg"))
+@cursor_reader = Nokogiri::XML::Reader(File.open("#{published_files}/cursor.xml"))
+@img_reader = Nokogiri::XML::Reader(File.open("#{published_files}/shapes.svg"))
 
-# Get cursor timestamps
-timestamps = @doc.xpath('//@timestamp').to_a.map(&:to_s).map(&:to_f)
+timestamps = []
+cursor = []
+dimensions = []
 
-# Creates directory for the temporary assets
+@cursor_reader.each do |node|
+    timestamps << node.attribute('timestamp').to_f if node.name == 'event' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+
+    cursor << node.inner_xml if node.name == 'cursor' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+end
+
+@img_reader.each do |node|
+    dimensions << [node.attribute('in').to_f, node.attribute('width').to_f, node.attribute('height').to_f] if node.name == 'image' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+end
+
+# Creates directory for the mouse pointer
 Dir.mkdir("#{published_files}/cursor") unless File.exist?("#{published_files}/cursor")
 
-# Create the mouse pointer
-builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-    # xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
+# Create the mouse pointer SVG
+builder = Builder::XmlMarkup.new
 
-    xml.svg(width: "16", height: "16", version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg') do
-        xml.circle(cx: '8', cy: '8', r: '8', fill: 'red')
-    end
+# Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging, remove for faster exports
+builder.svg(width: '16', height: '16') do
+    builder.circle(cx: '8', cy: '8', r: '8', fill: 'red')
 end
 
-File.open("#{published_files}/cursor/cursor.svg", 'w') do |file|
-    file.write(builder.to_xml)
+File.open("#{published_files}/cursor/cursor.svg", 'w') do |svg|
+    svg.write(builder.target!)
 end
 
-# Creates new file to hold the timestamps and the cursor's position
-File.open("#{published_files}/timestamps/cursor_timestamps", 'w') {}
+File.open("#{published_files}/timestamps/cursor_timestamps", 'w') do |file|
+    timestamps.each.with_index do |timestamp, frame_number|
+        # Get cursor coordinates
+        pointer = cursor[frame_number].split
 
-# Obtains all cursor events
-cursor = @doc.xpath('//event/cursor', 'xmlns' => 'http://www.w3.org/2000/svg')
+        next_slide = dimensions.find_index { |t, _, _| t > timestamp }
+        next_slide = dimensions.count if next_slide.nil?
 
-timestamps.each.with_index do |timestamp, frame_number|
+        dimensions = dimensions.drop(next_slide - 1)
+        dimension = dimensions.first
 
-    # Query to figure out which slide we're on - based on interval start since slide can change if mouse stationary
-    slide = @img.xpath("(//xmlns:image[@in <= #{timestamp}])[last()]", 'xmlns' => 'http://www.w3.org/2000/svg')
+        width = dimension[1]
+        height = dimension[2]
 
-    width = slide.attr('width').to_s
-    height = slide.attr('height').to_s
+        # Calculate original cursor coordinates
+        cursor_x = pointer[0].to_f * width
+        cursor_y = pointer[1].to_f * height
 
-    # Get cursor coordinates
-    pointer = cursor[frame_number].text.split
+        # Scaling required to reach target dimensions
+        x_scale = 1600 / width
+        y_scale = 1080 / height
 
-    cursor_x = (pointer[0].to_f * width.to_f).round(3)
-    cursor_y = (pointer[1].to_f * height.to_f).round(3)
+        # Keep aspect ratio
+        scale_factor = [x_scale, y_scale].min
 
-    # Scaling required to reach target dimensions
-    x_scale = 1600 / width.to_f
-    y_scale = 1080 / height.to_f
+        # Scale
+        cursor_x *= scale_factor
+        cursor_y *= scale_factor
 
-    # Keep aspect ratio
-    scale_factor = [x_scale, y_scale].min
-    
-    # Scale
-    cursor_x *= scale_factor
-    cursor_y *= scale_factor
+        # Translate given difference to new on-screen dimensions
+        x_offset = (1600 - scale_factor * width) / 2
+        y_offset = (1080 - scale_factor * height) / 2
 
-    # Translate given difference to new on-screen dimensions
-    x_offset = (1600 - scale_factor * width.to_f) / 2
-    y_offset = (1080 - scale_factor * height.to_f) / 2
+        cursor_x += x_offset
+        cursor_y += y_offset
 
-    cursor_x += x_offset
-    cursor_y += y_offset
+        # Move whiteboard to the right, making space for the chat and webcams
+        cursor_x += 320
 
-    # Move whiteboard to the right, making space for the chat and webcams
-    cursor_x += 320
-
-    # Writes the timestamp and position down
-    File.open("#{published_files}/timestamps/cursor_timestamps", 'a') do |file|
-        file.puts "#{timestamp}"
-        file.puts "overlay@mouse x #{cursor_x},"
-        file.puts "overlay@mouse y #{cursor_y};"
+        # Writes the timestamp and position down
+        file.puts "#{timestamp} overlay@m x #{cursor_x.round(3)}, overlay@m y #{cursor_y.round(3)};"
     end
 end
 

@@ -147,7 +147,7 @@ def parse_whiteboard_shapes(shape_reader)
 
       slide_in = node.attribute('in').to_f
       slide_out = node.attribute('out').to_f
-      
+
       timestamps << node.attribute('in').to_f
       timestamps << node.attribute('out').to_f
 
@@ -161,7 +161,6 @@ def parse_whiteboard_shapes(shape_reader)
 
     shape_timestamp = node.attribute('timestamp').to_f
     shape_undo = node.attribute('undo').to_f
-    shape_id = node.attribute('id').split('-').first
 
     shape_undo = slide_out if shape_undo.negative?
 
@@ -205,7 +204,6 @@ end
 # Render the visible frame for each interval
 File.open('timestamps/whiteboard_timestamps', 'w') do |file|
   # Example slide to instantiate variables
-  slide_id = 'image1'
   width = 1600
   height = 900
   view_box = '0 0 1600 900'

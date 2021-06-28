@@ -5,9 +5,25 @@ require 'nokogiri'
 require 'base64'
 require 'zlib'
 require 'builder'
+require 'digest'
+
 require_relative 'lib/interval_tree'
 include IntervalTree
 
+
+# for frame_number in 0..9224 do
+#   sha1 = Digest::SHA1.file "frames/frame#{frame_number}REC.svg"
+#   sha2 = Digest::SHA1.file "frames/frame#{frame_number}ITER.svg"
+
+#   if sha1 != sha2 then
+#     puts "FAILED for #{frame_number}"
+#     puts sha1
+#     puts sha2
+#   end
+
+# end
+# puts "All other files equal"
+# i = 1/0
 # Track how long the code is taking
 start = Time.now
 
@@ -221,7 +237,6 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     end
 
     draw = shapes_interval_tree.search(interval_start, unique: false)
-
     svg_export(draw, view_box, slide_href, width, height, frame_number)
 
     # Write the frame's duration down

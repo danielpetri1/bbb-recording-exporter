@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-# Copyright (c) 2011-2017 MISHIMA, Hiroyuki; Simeon Simeonov; Carlos Alonsol; Sam Davies; amarzot-yesware
+# Copyright (c) 2011-2021 MISHIMA, Hiroyuki; Simeon Simeonov; Carlos Alonsol; Sam Davies; amarzot-yesware; Daniel Petri Rocha
 
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -47,6 +47,9 @@ module IntervalTree
             s_center << k
           end
         end
+        
+        s_center = s_center.sort_by{|x|[x.begin, x.end]}
+
         Node.new(x_center, s_center,
                  divide_intervals(s_left), divide_intervals(s_right))
       end
@@ -92,18 +95,25 @@ module IntervalTree
           intervals.map(&:end).max.to_r
         ) / 2
       end
-  
-      def point_search(node, point, result, unique = true)
-        node.s_center.each do |k|
-          if k.begin <= point && point < k.end
-            result << k
+      
+      def point_search(node, point, result, unique)
+        stack = [node]
+
+        until stack.empty?
+          node = stack.pop
+
+          node.s_center.each do |k|
+            if k.begin <= point && point < k.end
+              result << k
+            end
           end
-        end
-        if node.left_node && ( point.to_r < node.x_center )
-          point_search(node.left_node, point, []).each{|k|result << k}
-        end
-        if node.right_node && ( point.to_r >= node.x_center )
-          point_search(node.right_node, point, []).each{|k|result << k}
+          if node.left_node && ( point.to_r < node.x_center )
+            stack.push(node.left_node)
+
+          elsif node.right_node && ( point.to_r >= node.x_center )
+            stack.push(node.right_node)
+          end
+
         end
         if unique
           result.uniq

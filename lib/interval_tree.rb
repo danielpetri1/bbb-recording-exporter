@@ -58,7 +58,6 @@ module IntervalTree
       DEFAULT_OPTIONS = { unique: true, sort: true }
       def search(query, options = {})
         options = DEFAULT_OPTIONS.merge(options)
-
         return nil unless @top_node
 
         if query.respond_to?(:begin)
@@ -98,6 +97,7 @@ module IntervalTree
 
       def point_search(node, point, result, unique)
         stack = [node]
+        point_r = point.to_r
 
         until stack.empty?
           node = stack.pop
@@ -107,11 +107,11 @@ module IntervalTree
             result << k if point < k.end
           end
 
-          if node.left_node && (point.to_r < node.x_center)
-            stack.push(node.left_node)
+          if node.left_node && (point_r < node.x_center)
+            stack << node.left_node
 
-          elsif node.right_node && (point.to_r >= node.x_center)
-            stack.push(node.right_node)
+          elsif node.right_node && (point_r >= node.x_center)
+            stack << node.right_node
           end
 
         end

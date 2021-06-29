@@ -5,6 +5,7 @@ require 'nokogiri'
 require 'base64'
 require 'zlib'
 require 'builder'
+require 'digest'
 
 require_relative 'lib/interval_tree'
 include IntervalTree
@@ -14,9 +15,12 @@ start = Time.now
 # Flags
 SVGZ_COMPRESSION = false
 
+# Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
+REMOVE_REDUNDANT_SHAPES = false
+
 FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 
-WhiteboardElement = Struct.new(:begin, :end, :value)
+WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :width, :height)
 
 def base64_encode(path)
@@ -171,7 +175,9 @@ def parse_whiteboard_shapes(shape_reader)
     timestamps << shape_leave
 
     xml = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>"
-    shapes << WhiteboardElement.new(shape_enter, shape_leave, xml)
+    id = node.attribute('shape').split('-').last
+
+    shapes << WhiteboardElement.new(shape_enter, shape_leave, xml, id)
   end
 
   [timestamps, slides, shapes]
@@ -225,6 +231,23 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
 
     draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
     draw = [] if draw.nil?
+
+    if REMOVE_REDUNDANT_SHAPES && !draw.empty? then
+      draw_unique = []
+      current_id = draw.first.id
+
+      draw.each_with_index do |shape, index|
+        
+        if shape.id != current_id then
+          current_id = shape.id
+          draw_unique << draw[index - 1]
+        end
+          
+      end
+
+      draw_unique << draw.last
+      draw = draw_unique
+    end
 
     svg_export(draw, view_box, slide_href, width, height, frame_number)
 

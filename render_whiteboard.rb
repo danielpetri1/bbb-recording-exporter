@@ -223,7 +223,7 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
       height = slide.height
     end
 
-    draw = shapes_interval_tree.search(interval_start, unique: false)
+    draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
     draw = [] if draw.nil?
 
     svg_export(draw, view_box, slide_href, width, height, frame_number)

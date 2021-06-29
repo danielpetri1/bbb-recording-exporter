@@ -73,10 +73,9 @@ Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 module IntervalTree
-
   class Tree
     def initialize(ranges, &range_factory)
-      range_factory = lambda { |l, r| (l ... r+1) } unless block_given?
+      range_factory = ->(l, r) { (l...r + 1) } unless block_given?
       ranges_excl = ensure_exclusive_end([ranges].flatten, range_factory)
       @top_node = divide_intervals(ranges_excl)
     end
@@ -85,41 +84,40 @@ module IntervalTree
     def divide_intervals(intervals)
       return nil if intervals.empty?
       x_center = center(intervals)
-      s_center = Array.new
-      s_left = Array.new
-      s_right = Array.new
+      s_center = []
+      s_left = []
+      s_right = []
 
       intervals.each do |k|
-        case
-        when k.end.to_r < x_center
+        if k.end.to_r < x_center
           s_left << k
-        when k.begin.to_r > x_center
+        elsif k.begin.to_r > x_center
           s_right << k
         else
           s_center << k
         end
       end
-      
-      s_center = s_center.sort_by{|x|[x.begin, x.end]}
+
+      s_center = s_center.sort_by { |x| [x.begin, x.end] }
 
       Node.new(x_center, s_center,
                divide_intervals(s_left), divide_intervals(s_right))
     end
 
     # Search by range or point
-    DEFAULT_OPTIONS = {unique: true}
+    DEFAULT_OPTIONS = { unique: true, sort: true }
     def search(query, options = {})
       options = DEFAULT_OPTIONS.merge(options)
-
       return nil unless @top_node
 
       if query.respond_to?(:begin)
         result = top_node.search(query)
         options[:unique] ? result.uniq : result
       else
-        point_search(self.top_node, query, [], options[:unique])
+        result = point_search(top_node, query, [], options[:unique])
       end
-        .sort_by{|x|[x.begin, x.end]}
+
+      options[:sort] ? result.sort_by { |x| [x.begin, x.end] } : result
     end
 
     def ==(other)
@@ -130,10 +128,9 @@ module IntervalTree
 
     def ensure_exclusive_end(ranges, range_factory)
       ranges.map do |range|
-        case
-        when !range.respond_to?(:exclude_end?)
+        if !range.respond_to?(:exclude_end?)
           range
-        when range.exclude_end?
+        elsif range.exclude_end?
           range
         else
           range_factory.call(range.begin, range.end)
@@ -147,23 +144,24 @@ module IntervalTree
         intervals.map(&:end).max.to_r
       ) / 2
     end
-    
+
     def point_search(node, point, result, unique)
       stack = [node]
+      point_r = point.to_r
 
       until stack.empty?
         node = stack.pop
 
         node.s_center.each do |k|
-          if k.begin <= point && point < k.end
-            result << k
-          end
+          break if k.begin > point
+          result << k if point < k.end
         end
-        if node.left_node && ( point.to_r < node.x_center )
+
+        if node.left_node && (point_r < node.x_center)
           stack << node.left_node
 
-        elsif node.right_node && ( point.to_r >= node.x_center )
-          stack.push << node.right_node
+        elsif node.right_node && (point_r >= node.x_center)
+          stack << node.right_node
         end
 
       end
@@ -173,7 +171,7 @@ module IntervalTree
         result
       end
     end
-  end # class Tree
+  end
 
   class Node
     def initialize(x_center, s_center, left_node, right_node)
@@ -186,9 +184,9 @@ module IntervalTree
 
     def ==(other)
       x_center == other.x_center &&
-      s_center == other.s_center &&
-      left_node == other.left_node &&
-      right_node == other.right_node
+        s_center == other.s_center &&
+        left_node == other.left_node &&
+        right_node == other.right_node
     end
 
     # Search by range only
@@ -201,8 +199,12 @@ module IntervalTree
     private
 
     def search_s_center(query)
-      s_center.select do |k|
-        (
+      result = []
+
+      s_center.each do |k|
+        break if k.begin > query.end
+
+        next unless (
           # k is entirely contained within the query
           (k.begin >= query.begin) &&
           (k.end <= query.end)
@@ -219,11 +221,13 @@ module IntervalTree
           (k.begin < query.begin) &&
           (k.end > query.end)
         )
+        result << k
       end
-    end
-  end # class Node
 
-end # module IntervalTree
+      result
+    end
+  end
+end
 
 #
 # Main code
@@ -235,21 +239,25 @@ SVGZ_COMPRESSION = false
 FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
 
-WhiteboardElement = Struct.new(:begin, :end, :value)
+# Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
+REMOVE_REDUNDANT_SHAPES = false
+
+WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :width, :height)
 
 def base64_encode(path)
   data = File.open(path).read
-  "data:image/#{File.extname(path).delete('.')};base64,#{Base64.encode64(data)}"
+  "data:image/#{File.extname(path).delete('.')};base64,#{Base64.strict_encode64(data)}"
 end
 
 def svg_export(draw, view_box, slide_href, width, height, frame_number)
   # Builds SVG frame
   builder = Builder::XmlMarkup.new
-  # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging, remove for faster exports
-  builder.svg(width: "1600", height: "1080", viewBox: view_box) do
+
+  # FFmpeg unfortunately seems to require the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
+  builder.svg(width: "1600", height: "1080", viewBox: view_box, 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
     # Display background image
-    builder.image(href: slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
+    builder.image('xlink:href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
 
     # Adds annotations
     draw.each do |shape|
@@ -280,8 +288,13 @@ def convert_whiteboard_shapes(doc)
     # Convert polls to data schema
     if annotation.attribute('shape').to_s.include? 'poll'
       poll = annotation.element_children.first
+      
       path = poll.attribute('href')
-      poll.set_attribute('href', base64_encode("#{@published_files}/#{path}"))
+      poll.remove_attribute('href')
+      
+      # Namespace xmlns:xlink is required by FFmpeg 
+      poll.add_namespace_definition('xlink', 'http://www.w3.org/1999/xlink')
+      poll.set_attribute('xlink:href', base64_encode("#{@published_files}/#{path}"))
     end
 
     # Convert XHTML to SVG so that text can be shown
@@ -289,6 +302,9 @@ def convert_whiteboard_shapes(doc)
 
     # Change text style so color is rendered
     text_style = annotation.attr('style')
+
+    # The text_color variable may not be required depending on your FFmpeg version
+    text_color = text_style.split(';').first.split(':')[1]
     annotation.set_attribute('style', "#{text_style};fill:currentcolor")
 
     foreign_object = annotation.xpath('switch/foreignObject')
@@ -298,7 +314,7 @@ def convert_whiteboard_shapes(doc)
     y = foreign_object.attr('y').to_s
 
     # Preserve the whitespace
-    svg = "<text x=\"#{x}\" y=\"#{y}\" xml:space=\"preserve\">"
+    svg = "<text x=\"#{x}\" y=\"#{y}\" xml:space=\"preserve\" fill=\"#{text_color}\">"
 
     text = foreign_object.children.children
 
@@ -390,7 +406,9 @@ def parse_whiteboard_shapes(shape_reader)
     timestamps << shape_leave
 
     xml = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>"
-    shapes << WhiteboardElement.new(shape_enter, shape_leave, xml)
+    id = node.attribute('shape').split('-').last
+
+    shapes << WhiteboardElement.new(shape_enter, shape_leave, xml, id)
   end
 
   [timestamps, slides, shapes]
@@ -442,8 +460,23 @@ File.open("#{@published_files}/timestamps/whiteboard_timestamps", 'w') do |file|
       height = slide.height
     end
 
-    draw = shapes_interval_tree.search(interval_start, unique: false)
+    draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
     draw = [] if draw.nil?
+
+    if REMOVE_REDUNDANT_SHAPES && !draw.empty?
+      draw_unique = []
+      current_id = draw.first.id
+
+      draw.each_with_index do |shape, index|
+        if shape.id != current_id
+          current_id = shape.id
+          draw_unique << draw[index - 1]
+        end
+      end
+
+      draw_unique << draw.last
+      draw = draw_unique
+    end
 
     svg_export(draw, view_box, slide_href, width, height, frame_number)
 

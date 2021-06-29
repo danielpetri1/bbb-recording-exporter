@@ -288,11 +288,11 @@ def convert_whiteboard_shapes(doc)
     # Convert polls to data schema
     if annotation.attribute('shape').to_s.include? 'poll'
       poll = annotation.element_children.first
-      
+
       path = poll.attribute('href')
       poll.remove_attribute('href')
-      
-      # Namespace xmlns:xlink is required by FFmpeg 
+
+      # Namespace xmlns:xlink is required by FFmpeg
       poll.add_namespace_definition('xlink', 'http://www.w3.org/1999/xlink')
       poll.set_attribute('xlink:href', base64_encode("#{@published_files}/#{path}"))
     end

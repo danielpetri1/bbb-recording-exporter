@@ -45,6 +45,9 @@ published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
 
 start = Time.now
 
+# Creates directory for the mouse pointer
+Dir.mkdir("#{published_files}/cursor") unless File.exist?("#{published_files}/cursor")
+
 # Opens cursor.xml and shapes.svg
 @cursor_reader = Nokogiri::XML::Reader(File.open("#{published_files}/cursor.xml"))
 @img_reader = Nokogiri::XML::Reader(File.open("#{published_files}/shapes.svg"))
@@ -62,9 +65,6 @@ end
 @img_reader.each do |node|
     dimensions << [node.attribute('in').to_f, node.attribute('width').to_f, node.attribute('height').to_f] if node.name == 'image' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
 end
-
-# Creates directory for the mouse pointer
-Dir.mkdir("#{published_files}/cursor") unless File.exist?("#{published_files}/cursor")
 
 # Create the mouse pointer SVG
 builder = Builder::XmlMarkup.new

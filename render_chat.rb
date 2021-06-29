@@ -1,5 +1,5 @@
 #!/usr/bin/ruby
-# frozen_string_literal: true
+# frozen_string_literal: false
 
 #
 # BigBlueButton open source conferencing system - http://www.bigbluebutton.org/
@@ -20,9 +20,11 @@
 # with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 #
 
-require "trollop"
+require 'trollop'
 require 'nokogiri'
 require 'zlib'
+require 'builder'
+
 require File.expand_path('../../../lib/recordandplayback', __FILE__)
 
 opts = Trollop.options do
@@ -38,108 +40,116 @@ BigBlueButton.logger = logger
 
 published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
 
+
+BigBlueButton.logger.info("Starting render_chat.rb for [#{meeting_id}]")
+
 #
 # Main code
 #
 
+# Flags
+SVGZ_COMPRESSION = false
+FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
+
 # Track how long the code is taking
 start = Time.now
-
-BigBlueButton.logger.info("Starting render_chat.rb for [#{meeting_id}]")
-
-# Opens slides_new.xml
-@chat = Nokogiri::XML(File.open("#{published_files}/slides_new.xml"))
-@meta = Nokogiri::XML(File.open("#{published_files}/metadata.xml"))
-
-# Get chat messages and timings
-recording_duration = (@meta.xpath('//duration').text.to_f / 1000).round(0)
-
-ins = @chat.xpath('//@in').to_a.map(&:to_s).unshift(0).push(recording_duration)
 
 # Creates directory for the temporary assets
 Dir.mkdir("#{published_files}/chats") unless File.exist?("#{published_files}/chats")
 Dir.mkdir("#{published_files}/timestamps") unless File.exist?("#{published_files}/timestamps")
 
-# Creates new file to hold the timestamps of the chat
-File.open("#{published_files}/timestamps/chat_timestamps", 'w') {}
+# Opens slides_new.xml
+@chat_reader = Nokogiri::XML::Reader(File.open("#{published_files}/slides_new.xml"))
 
-chat_intervals = []
+messages = []
 
-ins.each_cons(2) do |(a, b)|
-  chat_intervals << [a, b]
+@chat_reader.each do |node|
+    if node.name == 'chattimeline' && node.attribute('target') == 'chat' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+        messages << [node.attribute('in').to_f, node.attribute('name'), node.attribute('message')]
+    end
 end
 
-messages = @chat.xpath("//chattimeline[@target=\"chat\"]")
+# Text coordinates on the SVG file - chat window height is 840, + 15 to position text
+svg_x = 0
+svg_y = 855
 
-# Line break offset
-dy = 0
+svg_width = 8000 # Divisible by 320
+svg_height = 32_760 # Divisible by 15
+
+# Chat viewbox coordinates
+chat_x = 0
+chat_y = 0
 
 # Empty string to build <text>...</text> tag from
 text = ""
-message_heights = [0]
+overlay_position = []
 
 messages.each do |message|
-    # User name and chat timestamp
-    text += "<text x=\"2.5\" y=\"12.5\" dy=\"#{dy}em\" font-family=\"monospace\" font-size=\"15\" font-weight=\"bold\">#{message.attr('name')}</text>"
-    text += "<text x=\"2.5\" y=\"12.5\" dx=\"#{message.attr('name').length}em\" dy=\"#{dy}em\" font-family=\"monospace\" font-size=\"15\" fill=\"grey\" opacity=\"0.5\">#{Time.at(message.attr('in').to_f.round(0)).utc.strftime('%H:%M:%S')}</text>"
+    timestamp = message[0]
+    name = message[1]
+    chat = message[2]
 
-    line_breaks = message.attr('message').chars.each_slice(35).map(&:join)
-    message_heights.push(line_breaks.size + 2)
+    line_breaks = chat.chars.each_slice(35).map(&:join)
 
-    dy += 1
+    # Message height equals the line break amount + the line for the name / time + the empty line after
+    message_height = (line_breaks.size + 2) * 15
+
+    if svg_y + message_height > svg_height
+
+        svg_y = 855
+        svg_x += 320
+
+        chat_x += 320
+        chat_y = message_height
+
+    else
+        chat_y += message_height
+
+    end
+
+    overlay_position << [timestamp, chat_x, chat_y]
+
+    # Username and chat timestamp
+    text << "<text x=\"#{svg_x}\" y=\"#{svg_y}\" font-weight=\"bold\">#{name}    #{Time.at(timestamp.to_f.round(0)).utc.strftime('%H:%M:%S')}</text>"
+    svg_y += 15
 
     # Message text
+
     line_breaks.each do |line|
-        text += "<text x=\"2.5\" y=\"12.5\" dy=\"#{dy}em\" font-family=\"monospace\" font-size=\"15\">#{line}</text>"
-        dy += 1
+        text << "<text x=\"#{svg_x}\" y=\"#{svg_y}\">#{line}</text>"
+        svg_y += 15
     end
 
-    dy += 1
+    svg_y += 15
 end
 
-base = -840
+# Create SVG chat with all messages
+# Max. dimensions: 8032 x 32767
+builder = Builder::XmlMarkup.new
+builder.svg(width: svg_width, height: svg_height) do
+    builder << "<style>text{font-family: monospace; font-size: 15}</style>"
+    builder << text
+end
 
-# Create SVG chat with all messages for debugging purposes
-# builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-#     xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
-#     xml.svg(width: '320', height: dy * 15, version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
-#         xml << text
-#     end
-# end
-
-# File.open("#{published_files}/chats/chat.svg", 'w') do |file|
-#     file.write(builder.to_xml)
-# end
-
-chat_intervals.each.with_index do |frame, chat_number|
-    interval_start = frame[0]
-    interval_end = frame[1]
-
-    base += message_heights[chat_number] * 15
-
-    # Create SVG chat window
-    builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-        xml.doc.create_internal_subset('svg', '-//W3C//DTD SVG 1.1//EN', 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd')
-        xml.svg(width: '320', height: '840', viewBox: "0 #{base} 320 840", version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg', 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
-            xml << text
-        end
-    end
-
-    # Saves frame as SVGZ file
-    File.open("#{published_files}/chats/chat#{chat_number}.svgz", 'w') do |file|
+# Saves chat as SVG / SVGZ file
+File.open("#{published_files}/chats/chat.#{FILE_EXTENSION}", "w") do |file|
+    if SVGZ_COMPRESSION then
         svgz = Zlib::GzipWriter.new(file)
-        svgz.write(builder.to_xml)
+        svgz.write(builder.target!)
         svgz.close
+    else
+        file.write(builder.target!)
     end
+end
 
-    # # Saves frame as SVG file (for debugging purposes)
-    # File.open("#{published_files}/chats/chat#{chat_number}.svg", 'w') do |file|
-    #     file.write(builder.to_xml)
-    # end
+File.open("#{published_files}/timestamps/chat_timestamps", 'w') do |file|
+    file.puts "0 overlay@msg x 0, overlay@msg y 0;" if overlay_position.empty?
 
-    File.open("#{published_files}/timestamps/chat_timestamps", 'a') do |file|
-        file.puts "file #{published_files}/chats/chat#{chat_number}.svgz"
-        file.puts "duration #{(interval_end.to_f - interval_start.to_f).round(1)}"
+    overlay_position.each do |chat_state|
+        chat_x = chat_state[1]
+        chat_y = chat_state[2]
+
+        file.puts "#{chat_state[0]} crop@c x #{chat_x}, crop@c y #{chat_y};"
     end
 end
 

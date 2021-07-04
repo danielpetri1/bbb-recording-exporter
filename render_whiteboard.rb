@@ -17,8 +17,8 @@ start = Time.now
 Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/frames")
 
 # Flags
-SVGZ_COMPRESSION = true
-FFMPEG_REFERENCE_SUPPORT = true
+SVGZ_COMPRESSION = false
+FFMPEG_REFERENCE_SUPPORT = false
 BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
 
 FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"

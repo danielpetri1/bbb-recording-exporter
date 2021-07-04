@@ -2,12 +2,18 @@
 # frozen_string_literal: true
 
 require 'nokogiri'
+require 'builder'
 
 start = Time.now
 
+published_files = File.expand_path('.')
+
+# Creates directory for the mouse pointer
+Dir.mkdir("#{published_files}/cursor") unless File.exist?("#{published_files}/cursor")
+
 # Opens cursor.xml and shapes.svg
-@cursor_reader = Nokogiri::XML::Reader(File.open('cursor.xml'))
-@img_reader = Nokogiri::XML::Reader(File.open('shapes.svg'))
+@cursor_reader = Nokogiri::XML::Reader(File.open("#{published_files}/cursor.xml"))
+@img_reader = Nokogiri::XML::Reader(File.open("#{published_files}/shapes.svg"))
 
 timestamps = []
 cursor = []
@@ -23,7 +29,19 @@ end
     dimensions << [node.attribute('in').to_f, node.attribute('width').to_f, node.attribute('height').to_f] if node.name == 'image' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
 end
 
-File.open('timestamps/cursor_timestamps', 'w') do |file|
+# Create the mouse pointer SVG
+builder = Builder::XmlMarkup.new
+
+# Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging, remove for faster exports
+builder.svg(width: '16', height: '16') do
+    builder.circle(cx: '8', cy: '8', r: '8', fill: 'red')
+end
+
+File.open("#{published_files}/cursor/cursor.svg", 'w') do |svg|
+    svg.write(builder.target!)
+end
+
+File.open("#{published_files}/timestamps/cursor_timestamps", 'w') do |file|
     timestamps.each.with_index do |timestamp, frame_number|
         # Get cursor coordinates
         pointer = cursor[frame_number].split
@@ -76,4 +94,5 @@ File.open('timestamps/cursor_timestamps', 'w') do |file|
 end
 
 finish = Time.now
-puts finish - start
+
+puts "Rendering cursor took #{finish - start}"

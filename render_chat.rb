@@ -1,14 +1,24 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
 # frozen_string_literal: false
 
 require 'nokogiri'
 require 'zlib'
 
+published_files = File.expand_path('.')
+
+# Flags
+SVGZ_COMPRESSION = false
+FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
+
 # Track how long the code is taking
 start = Time.now
 
+# Creates directory for the temporary assets
+Dir.mkdir("#{published_files}/chats") unless File.exist?("#{published_files}/chats")
+Dir.mkdir("#{published_files}/timestamps") unless File.exist?("#{published_files}/timestamps")
+
 # Opens slides_new.xml
-@chat_reader = Nokogiri::XML::Reader(File.open('slides_new.xml'))
+@chat_reader = Nokogiri::XML::Reader(File.open("#{published_files}/slides_new.xml"))
 
 messages = []
 
@@ -72,27 +82,28 @@ messages.each do |message|
     svg_y += 15
 end
 
-# Create SVG chat with all messages
+# Create SVG chat with all messages. Using Nokogiri's XML Builder so it automatically sanitizes the input
 # Max. dimensions: 8032 x 32767
-builder = Nokogiri::XML::Builder.new(encoding: 'UTF-8') do |xml|
-     xml.svg(width: svg_width, height: svg_height, version: '1.1', 'xmlns' => 'http://www.w3.org/2000/svg') do
+# Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
+builder = Nokogiri::XML::Builder.new do |xml|
+    xml.svg(width: svg_width, height: svg_height) {
         xml << "<style>text{font-family: monospace; font-size: 15}</style>"
         xml << text
-     end
+    }
 end
 
 # Saves chat as SVG / SVGZ file
-File.open("chats/chat.svgz", 'w') do |file|
-    svgz = Zlib::GzipWriter.new(file)
-    svgz.write(builder.to_xml)
-    svgz.close
+File.open("#{published_files}/chats/chat.#{FILE_EXTENSION}", "w") do |file|
+    if SVGZ_COMPRESSION then
+        svgz = Zlib::GzipWriter.new(file)
+        svgz.write(builder.to_xml)
+        svgz.close
+    else
+        file.write(builder.to_xml)
+    end
 end
 
-# File.open("chats/chat.svg", 'w') do |file|
-# file.write(builder.to_xml)
-# end
-
-File.open('timestamps/chat_timestamps', 'w') do |file|
+File.open("#{published_files}/timestamps/chat_timestamps", 'w') do |file|
     file.puts "0 overlay@msg x 0, overlay@msg y 0;" if overlay_position.empty?
 
     overlay_position.each do |chat_state|
@@ -105,6 +116,5 @@ end
 
 # Benchmark
 finish = Time.now
-puts finish - start
 
-exit 0
+puts "Rendering chat took #{finish - start}"

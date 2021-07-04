@@ -6,31 +6,51 @@ require 'base64'
 require 'zlib'
 require 'builder'
 
-# Options
+require_relative 'lib/interval_tree'
+include IntervalTree
+
+start = Time.now
+
+@published_files = File.expand_path('.')
+
+# Creates directory for the whiteboard frames
+Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/frames")
+
+# Flags
 SVGZ_COMPRESSION = false
+FFMPEG_REFERENCE_SUPPORT = false
+BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
 
 FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
+VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
+
+# Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
+REMOVE_REDUNDANT_SHAPES = false
+
+WhiteboardElement = Struct.new(:begin, :end, :value, :id)
+WhiteboardSlide = Struct.new(:href, :begin, :width, :height)
 
 def base64_encode(path)
   data = File.open(path).read
-  "data:image/#{File.extname(path).delete('.')};base64,#{Base64.encode64(data)}"
+  "data:image/#{File.extname(path).delete('.')};base64,#{Base64.strict_encode64(data)}"
 end
 
 def svg_export(draw, view_box, slide_href, width, height, frame_number)
   # Builds SVG frame
   builder = Builder::XmlMarkup.new
-  # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging, remove for faster exports
-  builder.svg(width: "1600", height: "1080", viewBox: view_box, 'xmlns' => 'http://www.w3.org/2000/svg') do
+
+  # FFmpeg unfortunately seems to require the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
+  builder.svg(width: "1600", height: "1080", viewBox: view_box, 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
     # Display background image
-    builder.image(href: slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
+    builder.image('xlink:href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
 
     # Adds annotations
-    draw.each do |_, _, _, g|
-      builder << g
+    draw.each do |shape|
+      builder << shape.value
     end
   end
 
-  File.open("frames/frame#{frame_number}.#{FILE_EXTENSION}", "w") do |svg|
+  File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w") do |svg|
     if SVGZ_COMPRESSION
       svgz = Zlib::GzipWriter.new(svg)
       svgz.write(builder.target!)
@@ -53,8 +73,16 @@ def convert_whiteboard_shapes(doc)
     # Convert polls to data schema
     if annotation.attribute('shape').to_s.include? 'poll'
       poll = annotation.element_children.first
-      path = poll.attribute('href')
-      poll.set_attribute('href', base64_encode(path))
+
+      path = "#{@published_files}/#{poll.attribute('href')}"
+      poll.remove_attribute('href')
+
+      # Namespace xmlns:xlink is required by FFmpeg
+      poll.add_namespace_definition('xlink', 'http://www.w3.org/1999/xlink')
+
+      data = FFMPEG_REFERENCE_SUPPORT ? "file:///#{path}" : base64_encode(path)
+
+      poll.set_attribute('xlink:href', data)
     end
 
     # Convert XHTML to SVG so that text can be shown
@@ -62,6 +90,9 @@ def convert_whiteboard_shapes(doc)
 
     # Change text style so color is rendered
     text_style = annotation.attr('style')
+
+    # The text_color variable may not be required depending on your FFmpeg version
+    text_color = text_style.split(';').first.split(':')[1]
     annotation.set_attribute('style', "#{text_style};fill:currentcolor")
 
     foreign_object = annotation.xpath('switch/foreignObject')
@@ -71,7 +102,7 @@ def convert_whiteboard_shapes(doc)
     y = foreign_object.attr('y').to_s
 
     # Preserve the whitespace
-    svg = "<text x=\"#{x}\" y=\"#{y}\" xml:space=\"preserve\">"
+    svg = "<text x=\"#{x}\" y=\"#{y}\" xml:space=\"preserve\" fill=\"#{text_color}\">"
 
     text = foreign_object.children.children
 
@@ -101,7 +132,7 @@ def convert_whiteboard_shapes(doc)
   end
 
   # Save new shapes.svg copy
-  File.open("shapes_modified.svg", 'w') do |file|
+  File.open("#{@published_files}/shapes_modified.svg", 'w') do |file|
     file.write(doc)
   end
 end
@@ -140,12 +171,15 @@ def parse_whiteboard_shapes(shape_reader)
       slide_in = node.attribute('in').to_f
       slide_out = node.attribute('out').to_f
 
-      timestamps << slide_in
-      timestamps << slide_out
+      timestamps << node.attribute('in').to_f
+      timestamps << node.attribute('out').to_f
 
       # Image paths need to follow the URI Data Scheme (for slides and polls)
-      path = node.attribute('href')
-      slides << [node.attribute('id').to_s, base64_encode(path), slide_in, slide_out, node.attribute('width').to_f, node.attribute('height')]
+      path = "#{@published_files}/#{node.attribute('href')}"
+
+      data = FFMPEG_REFERENCE_SUPPORT ? "file:///#{path}" : base64_encode(path)
+
+      slides << WhiteboardSlide.new(data, slide_in, node.attribute('width').to_f, node.attribute('height'))
 
     end
 
@@ -153,7 +187,6 @@ def parse_whiteboard_shapes(shape_reader)
 
     shape_timestamp = node.attribute('timestamp').to_f
     shape_undo = node.attribute('undo').to_f
-    shape_id = node.attribute('id').split('-').first
 
     shape_undo = slide_out if shape_undo.negative?
 
@@ -164,25 +197,26 @@ def parse_whiteboard_shapes(shape_reader)
     timestamps << shape_leave
 
     xml = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>"
-    shapes << [shape_id, shape_enter, shape_leave, xml]
+    id = node.attribute('shape').split('-').last
+
+    shapes << WhiteboardElement.new(shape_enter, shape_leave, xml, id)
   end
 
   [timestamps, slides, shapes]
 end
 
-# Track how long the code is taking
-start = Time.now
-
 # Opens shapes.svg
-doc = Nokogiri::XML(File.open('shapes.svg')).remove_namespaces!
+doc = Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!
 
 convert_whiteboard_shapes(doc)
 
 # Parse the converted whiteboard shapes
-@timestamps, slides, shapes = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open('shapes_modified.svg')))
+@timestamps, slides, shapes = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
+
+shapes_interval_tree = IntervalTree::Tree.new(shapes)
 
 # Slide panzooms as array containing [panzoom timestamp, view_box parameter]
-panzooms = parse_panzooms(Nokogiri::XML::Reader(File.open('panzooms.xml')))
+panzooms = parse_panzooms(Nokogiri::XML::Reader(File.open("#{@published_files}/panzooms.xml")))
 
 # Create frame intervals with starting time 0
 intervals = @timestamps.uniq.sort
@@ -196,9 +230,8 @@ intervals.each_cons(2) do |(a, b)|
 end
 
 # Render the visible frame for each interval
-File.open('timestamps/whiteboard_timestamps', 'w') do |file|
-  # Example slide to instanciate variables
-  slide_id = 'image1'
+File.open("#{@published_files}/timestamps/whiteboard_timestamps", 'w') do |file|
+  # Example slide to instantiate variables
   width = 1600
   height = 900
   view_box = '0 0 1600 900'
@@ -210,11 +243,31 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
     # Get view_box parameter of the current slide
     _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
 
-    if !slides.empty? && interval_start >= slides.first[2]
-      slide_id, slide_href, _, _, width, height = slides.shift
+    if !slides.empty? && interval_start >= slides.first.begin
+      slide = slides.shift
+
+      slide_href = slide.href
+      width = slide.width
+      height = slide.height
     end
 
-    draw = shapes.select { |_, enter, leave, _| enter < interval_end && leave >= interval_end }
+    draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
+    draw = [] if draw.nil?
+
+    if REMOVE_REDUNDANT_SHAPES && !draw.empty?
+      draw_unique = []
+      current_id = draw.first.id
+
+      draw.each_with_index do |shape, index|
+        if shape.id != current_id
+          current_id = shape.id
+          draw_unique << draw[index - 1]
+        end
+      end
+
+      draw_unique << draw.last
+      draw = draw_unique
+    end
 
     svg_export(draw, view_box, slide_href, width, height, frame_number)
 
@@ -229,6 +282,37 @@ File.open('timestamps/whiteboard_timestamps', 'w') do |file|
   file.puts "file ../frames/frame#{frame_number - 1}.svg" if frame_number.positive?
 end
 
-# Benchmark
 finish = Time.now
-puts finish - start
+
+puts "Finished rendering whiteboard. Total: #{finish - start}"
+
+start = Time.now
+
+# Determine if video had screensharing
+deskshare = File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
+
+if deskshare
+  render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
+ "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
+ "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg " \
+ "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
+ "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} " \
+ "-i #{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION} -filter_complex " \
+ "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=320:h=840:x=0:y=0[chat];[4]scale=w=320:h=240[webcams];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1[deskshare];[0][deskshare]overlay=x=320:y=90[screenshare];[screenshare][1]overlay=x=320[slides];[slides][cursor]overlay@m[whiteboard];[whiteboard][chat]overlay=y=240[chats];[chats][webcams]overlay' " \
+ "-c:a aac -shortest -y #{@published_files}/meeting.mp4"
+else
+  render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
+ "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
+ "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg " \
+ "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
+ "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} -filter_complex " \
+ "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=320:h=840:x=0:y=0[chat];[4]scale=w=320:h=240[webcams];[0][1]overlay=x=320[slides];[slides][cursor]overlay@m[whiteboard];[whiteboard][chat]overlay=y=240[chats];[chats][webcams]overlay' " \
+ "-c:a aac -shortest -y #{@published_files}/meeting.mp4"
+end
+
+puts "Beginning to render video"
+
+system(render)
+
+finish = Time.now
+puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{finish - start}"

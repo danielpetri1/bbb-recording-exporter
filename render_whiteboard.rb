@@ -13,6 +13,9 @@ start = Time.now
 
 @published_files = File.expand_path('.')
 
+# Creates directory for the whiteboard frames
+Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/frames")
+
 # Flags
 SVGZ_COMPRESSION = false
 

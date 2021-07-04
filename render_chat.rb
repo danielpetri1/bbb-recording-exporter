@@ -123,22 +123,24 @@ messages.each do |message|
     svg_y += 15
 end
 
-# Create SVG chat with all messages
+# Create SVG chat with all messages. Using Nokogiri's XML Builder so it automatically sanitizes the input
 # Max. dimensions: 8032 x 32767
-builder = Builder::XmlMarkup.new
-builder.svg(width: svg_width, height: svg_height) do
-    builder << "<style>text{font-family: monospace; font-size: 15}</style>"
-    builder << text
+# Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
+builder = Nokogiri::XML::Builder.new do |xml|
+    xml.svg(width: svg_width, height: svg_height) {
+        xml << "<style>text{font-family: monospace; font-size: 15}</style>"
+        xml << text
+    }
 end
 
 # Saves chat as SVG / SVGZ file
 File.open("#{published_files}/chats/chat.#{FILE_EXTENSION}", "w") do |file|
     if SVGZ_COMPRESSION then
         svgz = Zlib::GzipWriter.new(file)
-        svgz.write(builder.target!)
+        svgz.write(builder.to_xml)
         svgz.close
     else
-        file.write(builder.target!)
+        file.write(builder.to_xml)
     end
 end
 

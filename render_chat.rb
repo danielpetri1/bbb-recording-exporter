@@ -6,10 +6,6 @@ require 'zlib'
 
 published_files = File.expand_path('.')
 
-# Flags
-SVGZ_COMPRESSION = false
-FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
-
 # Track how long the code is taking
 start = Time.now
 
@@ -93,14 +89,8 @@ builder = Nokogiri::XML::Builder.new do |xml|
 end
 
 # Saves chat as SVG / SVGZ file
-File.open("#{published_files}/chats/chat.#{FILE_EXTENSION}", "w") do |file|
-    if SVGZ_COMPRESSION then
-        svgz = Zlib::GzipWriter.new(file)
-        svgz.write(builder.to_xml)
-        svgz.close
-    else
-        file.write(builder.to_xml)
-    end
+File.open("#{published_files}/chats/chat.svg", "w") do |file|
+    file.write(builder.to_xml)
 end
 
 File.open("#{published_files}/timestamps/chat_timestamps", 'w') do |file|

@@ -17,7 +17,9 @@ start = Time.now
 Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/frames")
 
 # Flags
-SVGZ_COMPRESSION = false
+SVGZ_COMPRESSION = true
+FFMPEG_REFERENCE_SUPPORT = true
+BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
 
 FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
@@ -72,12 +74,15 @@ def convert_whiteboard_shapes(doc)
     if annotation.attribute('shape').to_s.include? 'poll'
       poll = annotation.element_children.first
 
-      path = poll.attribute('href')
+      path = "#{@published_files}/#{poll.attribute('href')}"
       poll.remove_attribute('href')
 
       # Namespace xmlns:xlink is required by FFmpeg
       poll.add_namespace_definition('xlink', 'http://www.w3.org/1999/xlink')
-      poll.set_attribute('xlink:href', base64_encode("#{@published_files}/#{path}"))
+
+      if FFMPEG_REFERENCE_SUPPORT then data = "file:///#{path}" else data = base64_encode(path) end
+
+      poll.set_attribute('xlink:href', data)
     end
 
     # Convert XHTML to SVG so that text can be shown
@@ -170,9 +175,12 @@ def parse_whiteboard_shapes(shape_reader)
       timestamps << node.attribute('out').to_f
 
       # Image paths need to follow the URI Data Scheme (for slides and polls)
-      path = node.attribute('href')
-      slides << WhiteboardSlide.new(base64_encode("#{@published_files}/#{path}"), slide_in, node.attribute('width').to_f, node.attribute('height'))
+      path = "#{@published_files}/#{node.attribute('href')}"
 
+      if FFMPEG_REFERENCE_SUPPORT then data = "file:///#{path}" else data = base64_encode(path) end
+
+      slides << WhiteboardSlide.new(data, slide_in, node.attribute('width').to_f, node.attribute('height'))
+      
     end
 
     next unless node.name == 'g' && node.attribute('class') == "shape"
@@ -285,18 +293,18 @@ deskshare = File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSIO
 
 if deskshare
   render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
- "-f concat -safe 0 -i #{@published_files}/timestamps/whiteboard_timestamps " \
+ "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
  "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg " \
- "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.#{FILE_EXTENSION} " \
+ "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
  "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} " \
  "-i #{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION} -filter_complex " \
  "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=320:h=840:x=0:y=0[chat];[4]scale=w=320:h=240[webcams];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1[deskshare];[0][deskshare]overlay=x=320:y=90[screenshare];[screenshare][1]overlay=x=320[slides];[slides][cursor]overlay@m[whiteboard];[whiteboard][chat]overlay=y=240[chats];[chats][webcams]overlay' " \
  "-c:a aac -shortest -y #{@published_files}/meeting.mp4"
 else
   render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
- "-f concat -safe 0 -i #{@published_files}/timestamps/whiteboard_timestamps " \
+ "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
  "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg " \
- "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.#{FILE_EXTENSION} " \
+ "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
  "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} -filter_complex " \
  "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=320:h=840:x=0:y=0[chat];[4]scale=w=320:h=240[webcams];[0][1]overlay=x=320[slides];[slides][cursor]overlay@m[whiteboard];[whiteboard][chat]overlay=y=240[chats];[chats][webcams]overlay' " \
  "-c:a aac -shortest -y #{@published_files}/meeting.mp4"
@@ -308,9 +316,3 @@ system(render)
 
 finish = Time.now
 puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{finish - start}"
-
-# Delete the contents of the scratch directories (race conditions)
-# FileUtils.rm_rf("#{@published_files}/chats")
-# FileUtils.rm_rf("#{@published_files}/cursor")
-# FileUtils.rm_rf("#{@published_files}/frames")
-# FileUtils.rm_rf("#{@published_files}/timestamps")

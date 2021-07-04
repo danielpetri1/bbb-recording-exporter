@@ -7,16 +7,12 @@
 !deskshare/
 !slides/
 !presentation/
-!frames/
 !deskshare/
-!timestamps/
-!chats/
-!cursor/
 !lib/interval_tree.rb
 !render_whiteboard.rb
 !download_client.rb
-!render_video.rb
 !export_annotated_slides.rb
 !render_cursor.rb
 !render_chat.rb
 !.rubocop.yml
+!librsvgdec.c

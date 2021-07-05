@@ -18,14 +18,14 @@ Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/
 
 # Flags
 SVGZ_COMPRESSION = false
-FFMPEG_REFERENCE_SUPPORT = false
+FFMPEG_REFERENCE_SUPPORT = true
 BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
 
 FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
 
 # Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
-REMOVE_REDUNDANT_SHAPES = false
+REMOVE_REDUNDANT_SHAPES = true
 
 WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :width, :height)

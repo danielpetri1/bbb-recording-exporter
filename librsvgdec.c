@@ -51,9 +51,12 @@ static int librsvg_decode_frame(AVCodecContext *avctx, void *data, int *got_fram
     // Create a GMemoryInputStream from the data
     GInputStream *input_stream;
     input_stream = g_memory_input_stream_new_from_data (pkt->data, pkt->size, NULL);
+    
+    GFile *referenced_file = NULL;
+    referenced_file = g_file_new_for_path(s->base_uri);
 
     handle = rsvg_handle_new_from_stream_sync (input_stream,
-                                  g_file_new_for_path(s->base_uri),
+                                  referenced_file,
                                   s->flag,
                                   NULL,
                                   &error);
@@ -108,8 +111,10 @@ static int librsvg_decode_frame(AVCodecContext *avctx, void *data, int *got_fram
 
     cairo_destroy(crender);
     cairo_surface_destroy(image);
-    g_object_unref(handle);
 
+    g_object_unref(handle);
+    g_object_unref(referenced_file);
+    g_object_unref(input_stream);
     *got_frame = 1;
 
     return 0;

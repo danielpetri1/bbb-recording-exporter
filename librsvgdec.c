@@ -48,11 +48,10 @@ static int librsvg_decode_frame(AVCodecContext *avctx, void *data, int *got_fram
 
     *got_frame = 0;
 
-    // Create a GMemoryInputStream from the data
     GInputStream *input_stream;
-    input_stream = g_memory_input_stream_new_from_data (pkt->data, pkt->size, NULL);
-    
     GFile *referenced_file = NULL;
+    
+    input_stream = g_memory_input_stream_new_from_data (pkt->data, pkt->size, NULL);
     referenced_file = g_file_new_for_path(s->base_uri);
 
     handle = rsvg_handle_new_from_stream_sync (input_stream,
@@ -60,9 +59,6 @@ static int librsvg_decode_frame(AVCodecContext *avctx, void *data, int *got_fram
                                   s->flag,
                                   NULL,
                                   &error);
-
-    // av_log(avctx, AV_LOG_INFO, "The current base URI is %s: ", rsvg_handle_get_base_uri (handle));
-    // av_log(avctx, AV_LOG_INFO, "Flag is %d: ", s->flag);
 
     if (error) {
         av_log(avctx, AV_LOG_ERROR, "Error parsing svg!\n");

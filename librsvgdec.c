@@ -44,13 +44,13 @@ static int librsvg_decode_frame(AVCodecContext *avctx, void *data, int *got_fram
     RsvgDimensionData unscaled_dimensions, dimensions;
     cairo_surface_t *image;
     cairo_t *crender = NULL;
+    
     GError *error = NULL;
-
+    GInputStream *input_stream;
+    GFile *referenced_file;
+    
     *got_frame = 0;
 
-    GInputStream *input_stream;
-    GFile *referenced_file = NULL;
-    
     input_stream = g_memory_input_stream_new_from_data (pkt->data, pkt->size, NULL);
     referenced_file = g_file_new_for_path(s->base_uri);
 

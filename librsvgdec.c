@@ -123,7 +123,7 @@ static const AVOption options[] = {
     { "width", "Width to render to (0 for default)", OFFSET(width), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, DEC },
     { "height", "Height to render to (0 for default)", OFFSET(height), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, DEC },
     { "keep_ar", "Keep aspect ratio with custom width/height", OFFSET(keep_ar), AV_OPT_TYPE_BOOL, { .i64 = 1 }, 0, 1, DEC },
-    { "base_uri", "Base URI to load referenced files", OFFSET(base_uri), AV_OPT_TYPE_STRING, { .str = "/" }, 0, 0, DEC },
+    { "base_uri", "Base URI to load referenced files", OFFSET(base_uri), AV_OPT_TYPE_STRING, { .str = "" }, 0, 0, DEC },
     { "handle_flag", "Value of RsvgHandleFlags", OFFSET(flag), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 2, DEC},
     { NULL },
 };

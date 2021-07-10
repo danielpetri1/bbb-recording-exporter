@@ -5,6 +5,7 @@ require 'nokogiri'
 require 'base64'
 require 'zlib'
 require 'builder'
+require 'fileutils'
 
 require_relative 'lib/interval_tree'
 include IntervalTree
@@ -13,19 +14,27 @@ start = Time.now
 
 @published_files = File.expand_path('.')
 
-# Creates directory for the whiteboard frames
+# Creates scratch directories
+Dir.mkdir("#{@published_files}/chats") unless File.exist?("#{@published_files}/chats")
+Dir.mkdir("#{@published_files}/cursor") unless File.exist?("#{@published_files}/cursor")
 Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/frames")
+Dir.mkdir("#{@published_files}/timestamps") unless File.exist?("#{@published_files}/timestamps")
 
-# Flags
+# Setting the SVGZ option to true will write less data on the disk.
 SVGZ_COMPRESSION = false
-FFMPEG_REFERENCE_SUPPORT = true
+
+# Set this to true if you've recompiled FFmpeg to enable external references. Writes less data on disk and is faster.
+FFMPEG_REFERENCE_SUPPORT = false
 BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
+
+# Video output quality: 0 is lossless, 51 is the worst. Default 23, 18 - 28 recommended
+CONSTANT_RATE_FACTOR = 23
 
 FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
 
 # Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
-REMOVE_REDUNDANT_SHAPES = true
+REMOVE_REDUNDANT_SHAPES = false
 
 WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :width, :height)
@@ -35,36 +44,9 @@ def base64_encode(path)
   "data:image/#{File.extname(path).delete('.')};base64,#{Base64.strict_encode64(data)}"
 end
 
-def svg_export(draw, view_box, slide_href, width, height, frame_number)
-  # Builds SVG frame
-  builder = Builder::XmlMarkup.new
-
-  # FFmpeg unfortunately seems to require the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
-  builder.svg(width: "1600", height: "1080", viewBox: view_box, 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
-    # Display background image
-    builder.image('xlink:href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
-
-    # Adds annotations
-    draw.each do |shape|
-      builder << shape.value
-    end
-  end
-
-  File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w") do |svg|
-    if SVGZ_COMPRESSION
-      svgz = Zlib::GzipWriter.new(svg)
-      svgz.write(builder.target!)
-      svgz.close
-
-    else
-      svg.write(builder.target!)
-    end
-  end
-end
-
-def convert_whiteboard_shapes(doc)
+def convert_whiteboard_shapes(whiteboard)
   # Find shape elements
-  doc.xpath('svg/g/g').each do |annotation|
+  whiteboard.xpath('svg/g/g').each do |annotation|
     # Make all annotations visible
     style = annotation.attr('style')
     style.sub! 'visibility:hidden', ''
@@ -133,7 +115,7 @@ def convert_whiteboard_shapes(doc)
 
   # Save new shapes.svg copy
   File.open("#{@published_files}/shapes_modified.svg", 'w') do |file|
-    file.write(doc)
+    file.write(whiteboard)
   end
 end
 
@@ -205,18 +187,210 @@ def parse_whiteboard_shapes(shape_reader)
   [timestamps, slides, shapes]
 end
 
+def render_chat(chat_reader)
+    messages = []
+
+    chat_reader.each do |node|
+        if node.name == 'chattimeline' && node.attribute('target') == 'chat' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+            messages << [node.attribute('in').to_f, node.attribute('name'), node.attribute('message')]
+        end
+    end
+
+    # Text coordinates on the SVG file - chat window height is 840, + 15 to position text
+    svg_x = 0
+    svg_y = 855
+
+    svg_width = 8000 # Divisible by 320
+    svg_height = 32_760 # Divisible by 15
+
+    # Chat viewbox coordinates
+    chat_x = 0
+    chat_y = 0
+
+    # Empty string to build <text>...</text> tag from
+    text = ""
+    overlay_position = []
+
+    messages.each do |message|
+        timestamp = message[0]
+        name = message[1]
+        chat = message[2]
+
+        line_breaks = chat.chars.each_slice(35).map(&:join)
+
+        # Message height equals the line break amount + the line for the name / time + the empty line after
+        message_height = (line_breaks.size + 2) * 15
+
+        if svg_y + message_height > svg_height
+
+            svg_y = 855
+            svg_x += 320
+
+            chat_x += 320
+            chat_y = message_height
+
+        else
+            chat_y += message_height
+
+        end
+
+        overlay_position << [timestamp, chat_x, chat_y]
+
+        # Username and chat timestamp
+        text << "<text x=\"#{svg_x}\" y=\"#{svg_y}\" font-weight=\"bold\">#{name}    #{Time.at(timestamp.to_f.round(0)).utc.strftime('%H:%M:%S')}</text>"
+        svg_y += 15
+
+        # Message text
+        line_breaks.each do |line|
+            text << "<text x=\"#{svg_x}\" y=\"#{svg_y}\">#{line}</text>"
+            svg_y += 15
+        end
+
+        svg_y += 15
+    end
+
+    # Create SVG chat with all messages. Using Nokogiri's XML Builder so it automatically sanitizes the input
+    # Max. dimensions: 8032 x 32767
+    # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
+    builder = Nokogiri::XML::Builder.new do |xml|
+        xml.svg(width: svg_width, height: svg_height) {
+            xml << "<style>text{font-family: monospace; font-size: 15}</style>"
+            xml << text
+        }
+    end
+
+    # Saves chat as SVG / SVGZ file
+    File.open("#{@published_files}/chats/chat.svg", "w") do |file|
+        file.write(builder.to_xml)
+    end
+
+    File.open("#{@published_files}/timestamps/chat_timestamps", 'w') do |file|
+        file.puts "0 overlay@msg x 0, overlay@msg y 0;" if overlay_position.empty?
+
+        overlay_position.each do |chat_state|
+            chat_x = chat_state[1]
+            chat_y = chat_state[2]
+
+            file.puts "#{chat_state[0]} crop@c x #{chat_x}, crop@c y #{chat_y};"
+        end
+    end
+end
+
+def render_cursor(panzooms, cursor_reader)
+    # Create the mouse pointer SVG
+    builder = Builder::XmlMarkup.new
+
+    # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging, remove for faster exports
+    builder.svg(width: '16', height: '16') do
+        builder.circle(cx: '8', cy: '8', r: '8', fill: 'red')
+    end
+
+    File.open("#{@published_files}/cursor/cursor.svg", 'w') do |svg|
+        svg.write(builder.target!)
+    end
+    
+    cursor = []
+    view_box = '0 0 1600 900'
+    timestamps = []
+    timestamp = 0
+
+    cursor_reader.each do |node|
+        timestamps << node.attribute('timestamp').to_f if node.name == 'event' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    
+        cursor << node.inner_xml if node.name == 'cursor' && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    end
+
+    panzoom_index = 0
+    File.open("#{@published_files}/timestamps/cursor_timestamps", 'w') do |file|
+        timestamps.each.with_index do |timestamp, frame_number|
+        
+            if !(panzoom_index >= panzooms.length) && timestamp >= panzooms[panzoom_index].first then
+                _, view_box = panzooms[panzoom_index]
+                panzoom_index += 1 
+                view_box = view_box.split(' ')
+            end
+
+            # Get cursor coordinates
+            pointer = cursor[frame_number].split
+
+            width = view_box[2].to_f
+            height = view_box[3].to_f
+
+            # Calculate original cursor coordinates
+            cursor_x = pointer[0].to_f * width
+            cursor_y = pointer[1].to_f * height
+
+            # Scaling required to reach target dimensions
+            x_scale = 1600 / width
+            y_scale = 1080 / height
+
+            # Keep aspect ratio
+            scale_factor = [x_scale, y_scale].min
+
+            # Scale
+            cursor_x *= scale_factor
+            cursor_y *= scale_factor
+
+            # Translate given difference to new on-screen dimensions
+            x_offset = (1600 - scale_factor * width) / 2
+            y_offset = (1080 - scale_factor * height) / 2
+
+            # Center cursor
+            cursor_x -= 8
+            cursor_y -= 8
+
+            cursor_x += x_offset
+            cursor_y += y_offset
+
+            # Move whiteboard to the right, making space for the chat and webcams
+            cursor_x += 320
+
+            # Writes the timestamp and position down
+            file.puts "#{timestamp} overlay@m x #{cursor_x.round(3)}, overlay@m y #{cursor_y.round(3)};"
+        end
+    end
+end
+
+def svg_export(draw, view_box, slide_href, width, height, frame_number)
+    # Builds SVG frame
+    builder = Builder::XmlMarkup.new
+  
+    # FFmpeg unfortunately seems to require the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
+    builder.svg(width: "1600", height: "1080", viewBox: view_box, 'xmlns:xlink' => 'http://www.w3.org/1999/xlink') do
+      # Display background image
+      builder.image('xlink:href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
+  
+      # Adds annotations
+      draw.each do |shape|
+        builder << shape.value
+      end
+    end
+  
+    File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w") do |svg|
+      if SVGZ_COMPRESSION
+        svgz = Zlib::GzipWriter.new(svg)
+        svgz.write(builder.target!)
+        svgz.close
+  
+      else
+        svg.write(builder.target!)
+      end
+    end
+end
+
 # Opens shapes.svg
-doc = Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!
+whiteboard = Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!
 
-convert_whiteboard_shapes(doc)
+convert_whiteboard_shapes(whiteboard)
 
-# Parse the converted whiteboard shapes
 @timestamps, slides, shapes = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
-
 shapes_interval_tree = IntervalTree::Tree.new(shapes)
 
-# Slide panzooms as array containing [panzoom timestamp, view_box parameter]
+# Presentation panzooms
 panzooms = parse_panzooms(Nokogiri::XML::Reader(File.open("#{@published_files}/panzooms.xml")))
+
+render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml")))
+render_cursor(panzooms, Nokogiri::XML::Reader(File.open("#{@published_files}/cursor.xml")))
 
 # Create frame intervals with starting time 0
 intervals = @timestamps.uniq.sort
@@ -320,11 +494,22 @@ else
   "[whiteboard][chat]overlay=y=240[chats];[chats][webcams]overlay' "
 end
 
-render << "-c:a aac -shortest -y #{@published_files}/meeting.mp4"
+render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y #{@published_files}/meeting.mp4"
 
 puts "Beginning to render video"
 
-system(render)
+ffmpeg = system(render)
+
+puts "Finished with code #{ffmpeg}"
 
 finish = Time.now
 puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{finish - start}"
+
+# Delete the contents of the scratch directories
+if ffmpeg then
+  FileUtils.rm_rf("#{@published_files}/chats")
+  FileUtils.rm_rf("#{@published_files}/cursor")
+  FileUtils.rm_rf("#{@published_files}/frames")
+  FileUtils.rm_rf("#{@published_files}/timestamps")
+  FileUtils.rm("#{@published_files}/shapes_modified.svg") 
+end

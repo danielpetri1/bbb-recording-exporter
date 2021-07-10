@@ -40,7 +40,7 @@ Render the presentation, whiteboard, mouse pointer and chat with
 
 FFmpeg compiled with `--enable-librsvg` and `--enable-libx264` <br  />
 
-Ruby with Nokogiri<br  />
+Ruby with the Nokogiri and Loofah gems installed <br  />
 
 ###  Rendering options 
 If your server runs BBB 2.2 or earlier, it is advised to set the flag `REMOVE_REDUNDANT_SHAPES` to **true** in `render_whiteboard.rb`. This will ensure the live whiteboard feature is still supported, require less storage space and increase rendering speeds.

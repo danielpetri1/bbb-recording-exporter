@@ -42,7 +42,7 @@ WhiteboardSlide = Struct.new(:href, :begin, :width, :height)
 
 def base64_encode(path)
   data = File.open(path).read
-  "data:image/#{File.extname(path).delete(".")};base64,#{Base64.strict_encode64(data)}"
+  "data:image/#{File.extname(path).delete('.')};base64,#{Base64.strict_encode64(data)}"
 end
 
 def convert_whiteboard_shapes(whiteboard)
@@ -57,7 +57,7 @@ def convert_whiteboard_shapes(whiteboard)
     if annotation.attribute("shape").to_s.include? "poll"
       poll = annotation.element_children.first
 
-      path = "#{@published_files}/#{poll.attribute("href")}"
+      path = "#{@published_files}/#{poll.attribute('href')}"
       poll.remove_attribute("href")
 
       # Namespace xmlns:xlink is required by FFmpeg
@@ -87,16 +87,16 @@ def convert_whiteboard_shapes(whiteboard)
     text = foreign_object.children.children
 
     builder = Builder::XmlMarkup.new
-    builder.text(x: "#{x}", y: "#{y}", fill: "#{text_color}", "xml:space" => "preserve") do
+    builder.text(x: x.to_s, y: y.to_s, fill: text_color.to_s, "xml:space" => "preserve") do
       text.each do |line|
         if line.to_s == "<br/>"
-          builder.tspan(x: "#{x}", dy: "0.9em") { builder << "<br/>" }
+          builder.tspan(x: x.to_s, dy: "0.9em") { builder << "<br/>" }
         else
           # Make a new line every 40 characters (arbitrary value, SVG does not support auto wrap)
           line_breaks = line.to_s.chars.each_slice(40).map(&:join)
 
           line_breaks.each do |row|
-            builder.tspan(x: "#{x}", dy: "0.9em") { builder << row }
+            builder.tspan(x: x.to_s, dy: "0.9em") { builder << row }
           end
         end
       end
@@ -151,7 +151,7 @@ def parse_whiteboard_shapes(shape_reader)
       timestamps << node.attribute("out").to_f
 
       # Image paths need to follow the URI Data Scheme (for slides and polls)
-      path = "#{@published_files}/#{node.attribute("href")}"
+      path = "#{@published_files}/#{node.attribute('href')}"
 
       data = FFMPEG_REFERENCE_SUPPORT ? "file:///#{path}" : base64_encode(path)
 
@@ -171,7 +171,7 @@ def parse_whiteboard_shapes(shape_reader)
     timestamps << shape_enter
     timestamps << shape_leave
 
-    xml = "<g style=\"#{node.attribute("style")}\">#{node.inner_xml}</g>"
+    xml = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>"
     id = node.attribute("shape").split("-").last
 
     shapes << WhiteboardElement.new(shape_enter, shape_leave, xml, id)
@@ -184,11 +184,10 @@ def render_chat(chat_reader)
   messages = []
 
   chat_reader.each do |node|
-    if node.name == "chattimeline" && node.attribute("target") == "chat" && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
-      # Scrub message to prevent HTML e.g. from links from breaking XML Builder
-      safe_message = Loofah.fragment(node.attribute("message")).scrub!(:strip)
-      messages << [node.attribute("in").to_f, node.attribute("name"), safe_message.text]
-    end
+    next unless node.name == "chattimeline" && node.attribute("target") == "chat" && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    # Scrub message to prevent HTML e.g. from links from breaking XML Builder
+    safe_message = Loofah.fragment(node.attribute("message")).scrub!(:strip)
+    messages << [node.attribute("in").to_f, node.attribute("name"), safe_message.text]
   end
 
   # Text coordinates on the SVG file - chat window height is 840, + 15 to position text
@@ -234,12 +233,12 @@ def render_chat(chat_reader)
       overlay_position << [timestamp, chat_x, chat_y]
 
       # Username and chat timestamp
-      builder.text(x: "#{svg_x}", y: "#{svg_y}", "font-weight" => "bold") { builder << "#{name}    #{Time.at(timestamp.to_f.round(0)).utc.strftime("%H:%M:%S")}" }
+      builder.text(x: svg_x.to_s, y: svg_y.to_s, "font-weight" => "bold") { builder << "#{name}    #{Time.at(timestamp.to_f.round(0)).utc.strftime('%H:%M:%S')}" }
       svg_y += 15
 
       # Message text
       line_breaks.each do |line|
-        builder.text(x: "#{svg_x}", y: "#{svg_y}") { builder << "#{line}" }
+        builder.text(x: svg_x.to_s, y: svg_y.to_s) { builder << line.to_s }
         svg_y += 15
       end
 
@@ -280,7 +279,6 @@ def render_cursor(panzooms, cursor_reader)
   cursor = []
   view_box = "0 0 1600 900"
   timestamps = []
-  timestamp = 0
 
   cursor_reader.each do |node|
     timestamps << node.attribute("timestamp").to_f if node.name == "event" && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
@@ -291,10 +289,10 @@ def render_cursor(panzooms, cursor_reader)
   panzoom_index = 0
   File.open("#{@published_files}/timestamps/cursor_timestamps", "w") do |file|
     timestamps.each.with_index do |timestamp, frame_number|
-      if !(panzoom_index >= panzooms.length) && timestamp >= panzooms[panzoom_index].first
+      if panzoom_index < panzooms.length && timestamp >= panzooms[panzoom_index].first
         _, view_box = panzooms[panzoom_index]
         panzoom_index += 1
-        view_box = view_box.split(" ")
+        view_box = view_box.split
       end
 
       # Get cursor coordinates

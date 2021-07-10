@@ -3,8 +3,8 @@
 !.gitignore
 !README.md
 !LICENSE
-!render_whiteboard.rb
-!render_video.rb
-!render_cursor.rb
-!render_chat.rb
+!demo/
+!lib/interval_tree.rb
+!export_presentation.rb
 !.rubocop.yml
+!librsvgdec.c

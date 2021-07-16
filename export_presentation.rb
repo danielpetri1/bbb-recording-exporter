@@ -53,8 +53,9 @@ def convert_whiteboard_shapes(whiteboard)
     style.sub! "visibility:hidden", ""
     annotation.set_attribute("style", style)
 
+    shape = annotation.attribute("shape").to_s
     # Convert polls to data schema
-    if annotation.attribute("shape").to_s.include? "poll"
+    if shape.include? "poll"
       poll = annotation.element_children.first
 
       path = "#{@published_files}/#{poll.attribute('href')}"
@@ -69,14 +70,11 @@ def convert_whiteboard_shapes(whiteboard)
     end
 
     # Convert XHTML to SVG so that text can be shown
-    next unless annotation.attribute("shape").to_s.include? "text"
-
-    # Change text style so color is rendered
-    text_style = annotation.attr("style")
+    next unless shape.include? "text"
 
     # The text_color variable may not be required depending on your FFmpeg version
-    text_color = text_style.split(";").first.split(":")[1]
-    annotation.set_attribute("style", "#{text_style};fill:currentcolor")
+    text_color = style.split(";").first.split(":")[1].to_s
+    annotation.set_attribute("style", "#{style};fill:currentcolor")
 
     foreign_object = annotation.xpath("switch/foreignObject")
 
@@ -87,16 +85,18 @@ def convert_whiteboard_shapes(whiteboard)
     text = foreign_object.children.children
 
     builder = Builder::XmlMarkup.new
-    builder.text(x: x.to_s, y: y.to_s, fill: text_color.to_s, "xml:space" => "preserve") do
+    builder.text(x: x, y: y, fill: text_color, "xml:space" => "preserve") do
       text.each do |line|
-        if line.to_s == "<br/>"
-          builder.tspan(x: x.to_s, dy: "0.9em") { builder << "<br/>" }
+        line = line.to_s
+
+        if line == "<br/>"
+          builder.tspan(x: x, dy: "0.9em") { builder << "<br/>" }
         else
           # Make a new line every 40 characters (arbitrary value, SVG does not support auto wrap)
-          line_breaks = line.to_s.chars.each_slice(40).map(&:join)
+          line_breaks = line.chars.each_slice(40).map(&:join)
 
           line_breaks.each do |row|
-            builder.tspan(x: x.to_s, dy: "0.9em") { builder << row }
+            builder.tspan(x: x, dy: "0.9em") { builder << row }
           end
         end
       end
@@ -110,6 +110,7 @@ def convert_whiteboard_shapes(whiteboard)
 
   # Save new shapes.svg copy
   File.open("#{@published_files}/shapes_modified.svg", "w") do |file|
+    file.chmod(0600)
     file.write(whiteboard)
   end
 end
@@ -120,10 +121,11 @@ def parse_panzooms(pan_reader)
 
   pan_reader.each do |node|
     next unless node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    node_name = node.name
 
-    timestamp = node.attribute("timestamp").to_f if node.name == "event"
+    timestamp = node.attribute("timestamp").to_f if node_name == "event"
 
-    if node.name == "viewBox"
+    if node_name == "viewBox"
       panzooms << [timestamp, node.inner_xml]
       @timestamps << timestamp
     end
@@ -143,12 +145,15 @@ def parse_whiteboard_shapes(shape_reader)
   shape_reader.each do |node|
     next unless node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
 
-    if node.name == "image" && node.attribute("class") == "slide"
+    node_name = node.name
+    node_class = node.attribute("class")
+
+    if node_name == "image" && node_class == "slide"
       slide_in = node.attribute("in").to_f
       slide_out = node.attribute("out").to_f
 
-      timestamps << node.attribute("in").to_f
-      timestamps << node.attribute("out").to_f
+      timestamps << slide_in
+      timestamps << slide_out
 
       # Image paths need to follow the URI Data Scheme (for slides and polls)
       path = "#{@published_files}/#{node.attribute('href')}"
@@ -158,7 +163,7 @@ def parse_whiteboard_shapes(shape_reader)
       slides << WhiteboardSlide.new(data, slide_in, node.attribute("width").to_f, node.attribute("height"))
     end
 
-    next unless node.name == "g" && node.attribute("class") == "shape"
+    next unless node_name == "g" && node_class == "shape"
 
     shape_timestamp = node.attribute("timestamp").to_f
     shape_undo = node.attribute("undo").to_f
@@ -210,11 +215,7 @@ def render_chat(chat_reader)
   builder.svg(width: svg_width, height: svg_height) do
     builder.style { builder << "text{font-family: monospace; font-size: 15}" }
 
-    messages.each do |message|
-      timestamp = message[0]
-      name = message[1]
-      chat = message[2]
-
+    messages.each do |timestamp, name, chat|
       line_breaks = chat.chars.each_slice(35).map(&:join)
 
       # Message height equals the line break amount + the line for the name / time + the empty line after
@@ -233,12 +234,12 @@ def render_chat(chat_reader)
       overlay_position << [timestamp, chat_x, chat_y]
 
       # Username and chat timestamp
-      builder.text(x: svg_x.to_s, y: svg_y.to_s, "font-weight" => "bold") { builder << "#{name}    #{Time.at(timestamp.to_f.round(0)).utc.strftime('%H:%M:%S')}" }
+      builder.text(x: svg_x, y: svg_y, "font-weight" => "bold") { builder << "#{name}    #{Time.at(timestamp.to_f.round(0)).utc.strftime('%H:%M:%S')}" }
       svg_y += 15
 
       # Message text
       line_breaks.each do |line|
-        builder.text(x: svg_x.to_s, y: svg_y.to_s) { builder << line.to_s }
+        builder.text(x: svg_x, y: svg_y) { builder << line.to_s }
         svg_y += 15
       end
 
@@ -248,17 +249,16 @@ def render_chat(chat_reader)
 
   # Saves chat as SVG / SVGZ file
   File.open("#{@published_files}/chats/chat.svg", "w") do |file|
+    file.chmod(0600)
     file.write(builder.target!)
   end
 
   File.open("#{@published_files}/timestamps/chat_timestamps", "w") do |file|
+    file.chmod(0600)
     file.puts "0 overlay@msg x 0, overlay@msg y 0;" if overlay_position.empty?
 
-    overlay_position.each do |chat_state|
-      chat_x = chat_state[1]
-      chat_y = chat_state[2]
-
-      file.puts "#{chat_state[0]} crop@c x #{chat_x}, crop@c y #{chat_y};"
+    overlay_position.each do |timestamp, chat_x, chat_y|
+      file.puts "#{timestamp} crop@c x #{chat_x}, crop@c y #{chat_y};"
     end
   end
 end
@@ -273,24 +273,31 @@ def render_cursor(panzooms, cursor_reader)
   end
 
   File.open("#{@published_files}/cursor/cursor.svg", "w") do |svg|
+    svg.chmod(0600)
     svg.write(builder.target!)
   end
 
   cursor = []
-  view_box = "0 0 1600 900"
   timestamps = []
+  view_box = ""
 
   cursor_reader.each do |node|
-    timestamps << node.attribute("timestamp").to_f if node.name == "event" && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    node_name = node.name
+    is_element = node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
 
-    cursor << node.inner_xml if node.name == "cursor" && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    timestamps << node.attribute("timestamp").to_f if node_name == "event" && is_element
+
+    cursor << node.inner_xml if node_name == "cursor" && is_element
   end
 
   panzoom_index = 0
   File.open("#{@published_files}/timestamps/cursor_timestamps", "w") do |file|
+    file.chmod(0600)
     timestamps.each.with_index do |timestamp, frame_number|
-      if panzoom_index < panzooms.length && timestamp >= panzooms[panzoom_index].first
-        _, view_box = panzooms[panzoom_index]
+      panzoom = panzooms[panzoom_index]
+
+      if panzoom_index < panzooms.length && timestamp >= panzoom.first
+        _, view_box = panzoom
         panzoom_index += 1
         view_box = view_box.split
       end
@@ -352,6 +359,7 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
   end
 
   File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w") do |svg|
+    svg.chmod(0600)
     if SVGZ_COMPRESSION
       svgz = Zlib::GzipWriter.new(svg)
       svgz.write(builder.target!)
@@ -389,24 +397,15 @@ end
 
 # Render the visible frame for each interval
 File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w") do |file|
-  # Example slide to instantiate variables
-  width = 1600
-  height = 900
-  view_box = "0 0 1600 900"
-  slide_href = "deskshare/deskshare.png"
+  file.chmod(0600)
+  slide = slides.first
 
-  frames.each do |frame|
-    interval_start, interval_end = frame
-
+  frames.each do |interval_start, interval_end|
     # Get view_box parameter of the current slide
     _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
 
     if !slides.empty? && interval_start >= slides.first.begin
       slide = slides.shift
-
-      slide_href = slide.href
-      width = slide.width
-      height = slide.height
     end
 
     draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
@@ -430,7 +429,7 @@ File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w") do |file|
       draw = draw_unique
     end
 
-    svg_export(draw, view_box, slide_href, width, height, frame_number)
+    svg_export(draw, view_box, slide.href, slide.width, slide.height, frame_number)
 
     # Write the frame's duration down
     file.puts "file ../frames/frame#{frame_number}.#{FILE_EXTENSION}"
@@ -440,7 +439,7 @@ File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w") do |file|
   end
 
   # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
-  file.puts "file ../frames/frame#{frame_number - 1}.svg" if frame_number.positive?
+  file.puts "file ../frames/frame#{frame_number - 1}.#{FILE_EXTENSION}" if frame_number.positive?
 end
 
 finish = Time.now
@@ -489,10 +488,4 @@ finish = Time.now
 puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{finish - start}"
 
 # Delete the contents of the scratch directories
-if ffmpeg
-  FileUtils.rm_rf("#{@published_files}/chats")
-  FileUtils.rm_rf("#{@published_files}/cursor")
-  FileUtils.rm_rf("#{@published_files}/frames")
-  FileUtils.rm_rf("#{@published_files}/timestamps")
-  FileUtils.rm("#{@published_files}/shapes_modified.svg")
-end
+FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames", "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg"]) if ffmpeg

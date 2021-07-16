@@ -11,8 +11,6 @@ require "loofah"
 require_relative "lib/interval_tree"
 include IntervalTree
 
-start = Time.now
-
 @published_files = File.expand_path(".")
 
 # Creates scratch directories
@@ -110,12 +108,12 @@ def convert_whiteboard_shapes(whiteboard)
 
   # Save new shapes.svg copy
   File.open("#{@published_files}/shapes_modified.svg", "w") do |file|
-    file.chmod(0600)
+    file.chmod(0o600)
     file.write(whiteboard)
   end
 end
 
-def parse_panzooms(pan_reader)
+def parse_panzooms(pan_reader, timestamps)
   panzooms = []
   timestamp = 0
 
@@ -127,20 +125,20 @@ def parse_panzooms(pan_reader)
 
     if node_name == "viewBox"
       panzooms << [timestamp, node.inner_xml]
-      @timestamps << timestamp
+      timestamps << timestamp
     end
   end
 
-  panzooms
+  [panzooms, timestamps]
 end
 
 def parse_whiteboard_shapes(shape_reader)
   slide_in = 0
   slide_out = 0
 
-  timestamps = []
-  slides = []
   shapes = []
+  slides = []
+  timestamps = []
 
   shape_reader.each do |node|
     next unless node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
@@ -182,7 +180,7 @@ def parse_whiteboard_shapes(shape_reader)
     shapes << WhiteboardElement.new(shape_enter, shape_leave, xml, id)
   end
 
-  [timestamps, slides, shapes]
+  [shapes, slides, timestamps]
 end
 
 def render_chat(chat_reader)
@@ -249,12 +247,12 @@ def render_chat(chat_reader)
 
   # Saves chat as SVG / SVGZ file
   File.open("#{@published_files}/chats/chat.svg", "w") do |file|
-    file.chmod(0600)
+    file.chmod(0o600)
     file.write(builder.target!)
   end
 
   File.open("#{@published_files}/timestamps/chat_timestamps", "w") do |file|
-    file.chmod(0600)
+    file.chmod(0o600)
     file.puts "0 overlay@msg x 0, overlay@msg y 0;" if overlay_position.empty?
 
     overlay_position.each do |timestamp, chat_x, chat_y|
@@ -273,7 +271,7 @@ def render_cursor(panzooms, cursor_reader)
   end
 
   File.open("#{@published_files}/cursor/cursor.svg", "w") do |svg|
-    svg.chmod(0600)
+    svg.chmod(0o600)
     svg.write(builder.target!)
   end
 
@@ -292,7 +290,7 @@ def render_cursor(panzooms, cursor_reader)
 
   panzoom_index = 0
   File.open("#{@published_files}/timestamps/cursor_timestamps", "w") do |file|
-    file.chmod(0600)
+    file.chmod(0o600)
     timestamps.each.with_index do |timestamp, frame_number|
       panzoom = panzooms[panzoom_index]
 
@@ -343,6 +341,100 @@ def render_cursor(panzooms, cursor_reader)
   end
 end
 
+def render_video
+  # Determine if video had screensharing
+  deskshare = File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
+
+  render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
+          "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
+          "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg " \
+          "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
+          "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} "
+
+  render << if deskshare
+    "-i #{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION} -filter_complex " \
+    "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
+    "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=320:h=840:x=0:y=0[chat];" \
+    "[4]scale=w=320:h=240[webcams];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1[deskshare];" \
+    "[0][deskshare]overlay=x=320:y=90[screenshare];" \
+    "[screenshare][1]overlay=x=320[slides];" \
+    "[slides][cursor]overlay@m[whiteboard];" \
+    "[whiteboard][chat]overlay=y=240[chats];" \
+    "[chats][webcams]overlay' "
+  else
+    "-filter_complex '[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
+    "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=320:h=840:x=0:y=0[chat];" \
+    "[4]scale=w=320:h=240[webcams];" \
+    "[0][1]overlay=x=320[slides];" \
+    "[slides][cursor]overlay@m[whiteboard];" \
+    "[whiteboard][chat]overlay=y=240[chats];[chats][webcams]overlay' "
+  end
+
+  render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y #{@published_files}/meeting.mp4"
+
+  system(render)
+end
+
+def render_whiteboard(panzooms, slides, shapes, timestamps)
+  shapes_interval_tree = IntervalTree::Tree.new(shapes)
+
+  # Create frame intervals with starting time 0
+  intervals = timestamps.uniq.sort
+  intervals = intervals.drop(1) if intervals.first == -1
+
+  frame_number = 0
+  frames = []
+
+  intervals.each_cons(2) do |(a, b)|
+    frames << [a, b]
+  end
+
+  # Render the visible frame for each interval
+  File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w") do |file|
+    file.chmod(0o600)
+    slide = slides.first
+
+    frames.each do |interval_start, interval_end|
+      # Get view_box parameter of the current slide
+      _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
+
+      slide = slides.shift if !slides.empty? && interval_start >= slides.first.begin
+
+      draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
+      draw = [] if draw.nil?
+
+      if REMOVE_REDUNDANT_SHAPES && !draw.empty?
+        draw_unique = []
+        current_id = draw.first.id
+
+        index = 0
+        draw.each do |shape|
+          if shape.id != current_id
+            current_id = shape.id
+            draw_unique << draw[index - 1]
+          end
+
+          index += 1
+        end
+
+        draw_unique << draw.last
+        draw = draw_unique
+      end
+
+      svg_export(draw, view_box, slide.href, slide.width, slide.height, frame_number)
+
+      # Write the frame's duration down
+      file.puts "file ../frames/frame#{frame_number}.#{FILE_EXTENSION}"
+      file.puts "duration #{(interval_end - interval_start).round(1)}"
+
+      frame_number += 1
+    end
+
+    # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
+    file.puts "file ../frames/frame#{frame_number - 1}.#{FILE_EXTENSION}" if frame_number.positive?
+  end
+end
+
 def svg_export(draw, view_box, slide_href, width, height, frame_number)
   # Builds SVG frame
   builder = Builder::XmlMarkup.new
@@ -359,7 +451,7 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
   end
 
   File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w") do |svg|
-    svg.chmod(0600)
+    svg.chmod(0o600)
     if SVGZ_COMPRESSION
       svgz = Zlib::GzipWriter.new(svg)
       svgz.write(builder.target!)
@@ -370,122 +462,36 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
   end
 end
 
-# Opens shapes.svg
-whiteboard = Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!
+def export_presentation
+  # Benchmark
+  start = Time.now
 
-convert_whiteboard_shapes(whiteboard)
+  puts "Started composing presentation"
 
-@timestamps, slides, shapes = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
-shapes_interval_tree = IntervalTree::Tree.new(shapes)
+  # Convert whiteboard assets to a format compatible with FFmpeg
+  convert_whiteboard_shapes(Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!)
 
-# Presentation panzooms
-panzooms = parse_panzooms(Nokogiri::XML::Reader(File.open("#{@published_files}/panzooms.xml")))
+  shapes, slides, timestamps = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
+  panzooms, timestamps = parse_panzooms(Nokogiri::XML::Reader(File.open("#{@published_files}/panzooms.xml")), timestamps)
 
-render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml")))
-render_cursor(panzooms, Nokogiri::XML::Reader(File.open("#{@published_files}/cursor.xml")))
+  # Create video assets
+  render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml")))
+  render_cursor(panzooms, Nokogiri::XML::Reader(File.open("#{@published_files}/cursor.xml")))
+  render_whiteboard(panzooms, slides, shapes, timestamps)
 
-# Create frame intervals with starting time 0
-intervals = @timestamps.uniq.sort
-intervals = intervals.drop(1) if intervals.first == -1
+  puts "Finished composing presentation. Total: #{Time.now - start}"
 
-frame_number = 0
-frames = []
+  start = Time.now
 
-intervals.each_cons(2) do |(a, b)|
-  frames << [a, b]
+  puts "Beginning to render video"
+  ffmpeg = render_video
+
+  puts "Finished with code #{ffmpeg}"
+
+  puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{Time.now - start}" if ffmpeg
 end
 
-# Render the visible frame for each interval
-File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w") do |file|
-  file.chmod(0600)
-  slide = slides.first
-
-  frames.each do |interval_start, interval_end|
-    # Get view_box parameter of the current slide
-    _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
-
-    if !slides.empty? && interval_start >= slides.first.begin
-      slide = slides.shift
-    end
-
-    draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
-    draw = [] if draw.nil?
-
-    if REMOVE_REDUNDANT_SHAPES && !draw.empty?
-      draw_unique = []
-      current_id = draw.first.id
-
-      index = 0
-      draw.each do |shape|
-        if shape.id != current_id
-          current_id = shape.id
-          draw_unique << draw[index - 1]
-        end
-
-        index += 1
-      end
-
-      draw_unique << draw.last
-      draw = draw_unique
-    end
-
-    svg_export(draw, view_box, slide.href, slide.width, slide.height, frame_number)
-
-    # Write the frame's duration down
-    file.puts "file ../frames/frame#{frame_number}.#{FILE_EXTENSION}"
-    file.puts "duration #{(interval_end - interval_start).round(1)}"
-
-    frame_number += 1
-  end
-
-  # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
-  file.puts "file ../frames/frame#{frame_number - 1}.#{FILE_EXTENSION}" if frame_number.positive?
-end
-
-finish = Time.now
-
-puts "Finished exporting presentation. Total: #{finish - start}"
-
-start = Time.now
-
-# Determine if video had screensharing
-deskshare = File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
-
-render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
-         "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
-         "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg " \
-         "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
-         "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} "
-
-render << if deskshare
-  "-i #{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION} -filter_complex " \
-  "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
-  "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=320:h=840:x=0:y=0[chat];" \
-  "[4]scale=w=320:h=240[webcams];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1[deskshare];" \
-  "[0][deskshare]overlay=x=320:y=90[screenshare];" \
-  "[screenshare][1]overlay=x=320[slides];" \
-  "[slides][cursor]overlay@m[whiteboard];" \
-  "[whiteboard][chat]overlay=y=240[chats];" \
-  "[chats][webcams]overlay' "
-else
-  "-filter_complex '[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
-  "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=320:h=840:x=0:y=0[chat];" \
-  "[4]scale=w=320:h=240[webcams];" \
-  "[0][1]overlay=x=320[slides];" \
-  "[slides][cursor]overlay@m[whiteboard];" \
-  "[whiteboard][chat]overlay=y=240[chats];[chats][webcams]overlay' "
-end
-
-render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y #{@published_files}/meeting.mp4"
-
-puts "Beginning to render video"
-
-ffmpeg = system(render)
-
-puts "Finished with code #{ffmpeg}"
-
-finish = Time.now
-puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{finish - start}"
+export_presentation
 
 # Delete the contents of the scratch directories
-FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames", "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg"]) if ffmpeg
+FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames", "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg"])

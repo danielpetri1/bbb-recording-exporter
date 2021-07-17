@@ -11,13 +11,13 @@ def download(file)
   path = "https://hostname/presentation/meetingID/#{file}"
 
   # Lasttest
-  path = "https://vmott40.in.tum.de/presentation/b87bbe0888dff19aa181be51d86a3f52543fc5a7-1620820241322/#{file}"
+  # path = "https://vmott40.in.tum.de/presentation/b87bbe0888dff19aa181be51d86a3f52543fc5a7-1620820241322/#{file}"
 
   # Aspect ratio test
   # path = "https://vmott40.in.tum.de/presentation/fccbbfd5ae98f6eb1e6bf57fc8970672da7244b6-1623441506330/#{file}"
 
   # GBS Repetirorium
-  # path = "https://balancer.bbb.rbg.tum.de/presentation/32660e42f95b3ba7a92c968cdc9e0c37272cf463-1613978884363/#{file}"
+  path = "https://balancer.bbb.rbg.tum.de/presentation/32660e42f95b3ba7a92c968cdc9e0c37272cf463-1613978884363/#{file}"
 
   puts "Downloading #{path}"
 
@@ -31,7 +31,7 @@ end
 # Video: 'video/webcams.mp4', 'deskshare/deskshare.mp4'
 # Chat: 'slides_new.xml'
 
-['shapes.svg', 'cursor.xml', 'panzooms.xml', 'presentation_text.json', 'captions.json', 'video/webcams.webm', 'slides_new.xml'].each do |get|
+['shapes.svg', 'cursor.xml', 'panzooms.xml', 'presentation_text.json', 'captions.json', 'video/webcams.mp4', 'deskshare/deskshare.mp4', 'slides_new.xml'].each do |get|
   download(get)
 end
 

@@ -33,7 +33,7 @@ FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
 
 # Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
-REMOVE_REDUNDANT_SHAPES = false
+REMOVE_REDUNDANT_SHAPES = true
 
 WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :width, :height)
@@ -107,8 +107,7 @@ def convert_whiteboard_shapes(whiteboard)
   end
 
   # Save new shapes.svg copy
-  File.open("#{@published_files}/shapes_modified.svg", "w") do |file|
-    file.chmod(0o600)
+  File.open("#{@published_files}/shapes_modified.svg", "w", 0o600) do |file|
     file.write(whiteboard)
   end
 end
@@ -183,6 +182,17 @@ def parse_whiteboard_shapes(shape_reader)
   [shapes, slides, timestamps]
 end
 
+def remove_adjacent(array)
+  index = 0
+
+  until array[index + 1].nil?
+    array[index] = nil if array[index].id == array[index + 1].id
+    index += 1
+  end
+
+  array.compact
+end
+
 def render_chat(chat_reader)
   messages = []
 
@@ -251,12 +261,11 @@ def render_chat(chat_reader)
     file.write(builder.target!)
   end
 
-  File.open("#{@published_files}/timestamps/chat_timestamps", "w") do |file|
-    file.chmod(0o600)
+  File.open("#{@published_files}/timestamps/chat_timestamps", "w", 0o600) do |file|
     file.puts "0 overlay@msg x 0, overlay@msg y 0;" if overlay_position.empty?
 
-    overlay_position.each do |timestamp, chat_x, chat_y|
-      file.puts "#{timestamp} crop@c x #{chat_x}, crop@c y #{chat_y};"
+    overlay_position.each do |timestamp, x, y|
+      file.puts "#{timestamp} crop@c x #{x}, crop@c y #{y};"
     end
   end
 end
@@ -270,8 +279,7 @@ def render_cursor(panzooms, cursor_reader)
     builder.circle(cx: "8", cy: "8", r: "8", fill: "red")
   end
 
-  File.open("#{@published_files}/cursor/cursor.svg", "w") do |svg|
-    svg.chmod(0o600)
+  File.open("#{@published_files}/cursor/cursor.svg", "w", 0o600) do |svg|
     svg.write(builder.target!)
   end
 
@@ -281,16 +289,15 @@ def render_cursor(panzooms, cursor_reader)
 
   cursor_reader.each do |node|
     node_name = node.name
-    is_element = node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    next unless node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
 
-    timestamps << node.attribute("timestamp").to_f if node_name == "event" && is_element
+    timestamps << node.attribute("timestamp").to_f if node_name == "event"
 
-    cursor << node.inner_xml if node_name == "cursor" && is_element
+    cursor << node.inner_xml if node_name == "cursor"
   end
 
   panzoom_index = 0
-  File.open("#{@published_files}/timestamps/cursor_timestamps", "w") do |file|
-    file.chmod(0o600)
+  File.open("#{@published_files}/timestamps/cursor_timestamps", "w", 0o600) do |file|
     timestamps.each.with_index do |timestamp, frame_number|
       panzoom = panzooms[panzoom_index]
 
@@ -390,8 +397,7 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
   end
 
   # Render the visible frame for each interval
-  File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w") do |file|
-    file.chmod(0o600)
+  File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w", 0o600) do |file|
     slide = slides.first
 
     frames.each do |interval_start, interval_end|
@@ -403,23 +409,7 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
       draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
       draw = [] if draw.nil?
 
-      if REMOVE_REDUNDANT_SHAPES && !draw.empty?
-        draw_unique = []
-        current_id = draw.first.id
-
-        index = 0
-        draw.each do |shape|
-          if shape.id != current_id
-            current_id = shape.id
-            draw_unique << draw[index - 1]
-          end
-
-          index += 1
-        end
-
-        draw_unique << draw.last
-        draw = draw_unique
-      end
+      draw = remove_adjacent(draw) if REMOVE_REDUNDANT_SHAPES && !draw.empty?
 
       svg_export(draw, view_box, slide.href, slide.width, slide.height, frame_number)
 
@@ -439,8 +429,8 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
   # Builds SVG frame
   builder = Builder::XmlMarkup.new
 
-  # FFmpeg unfortunately seems to require the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
-  builder.svg(width: "1600", height: "1080", viewBox: view_box, "xmlns:xlink" => "http://www.w3.org/1999/xlink") do
+  # FFmpeg requires the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
+  builder.svg(width: "1600", height: "1080", viewBox: view_box, "xmlns:xlink" => "http://www.w3.org/1999/xlink", 'xmlns' => 'http://www.w3.org/2000/svg') do
     # Display background image
     builder.image('xlink:href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
 
@@ -450,8 +440,7 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
     end
   end
 
-  File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w") do |svg|
-    svg.chmod(0o600)
+  File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w", 0o600) do |svg|
     if SVGZ_COMPRESSION
       svgz = Zlib::GzipWriter.new(svg)
       svgz.write(builder.target!)

@@ -48,10 +48,10 @@ module IntervalTree
           end
         end
 
-        s_center = s_center.sort_by { |x| [x.begin, x.end] }
+        s_center.sort_by! { |x| [x.begin, x.end] }
 
         Node.new(x_center, s_center,
-                 divide_intervals(s_left), divide_intervals(s_right))
+          divide_intervals(s_left), divide_intervals(s_right))
       end
 
       # Search by range or point
@@ -62,11 +62,10 @@ module IntervalTree
 
         if query.respond_to?(:begin)
           result = top_node.search(query)
-          options[:unique] ? result.uniq : result
+          options[:unique] ? result.uniq! : result
         else
           result = point_search(top_node, query, [], options[:unique])
         end
-
         options[:sort] ? result.sort_by { |x| [x.begin, x.end] } : result
       end
 

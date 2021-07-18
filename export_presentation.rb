@@ -83,7 +83,7 @@ def add_chapters(duration, slides)
     file << chapter
   end
 
-  ffmpeg = system("ffmpeg -i meeting.mp4 -i meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y meeting_chapters.mp4")
+  ffmpeg = system("ffmpeg -i meeting.mp4 -i meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y -t #{duration} meeting_chapters.mp4")
 
   system("mv meeting_chapters.mp4 meeting.mp4")
 end
@@ -538,8 +538,8 @@ def export_presentation
   
   puts "Finished with code #{ffmpeg}"
 
-  #add_chapters(duration, slides)
-  #add_captions
+  add_chapters(duration, slides)
+  add_captions
   
   puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{Time.now - start}" if ffmpeg
 end

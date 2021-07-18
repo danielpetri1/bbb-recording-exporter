@@ -7,6 +7,7 @@ require "zlib"
 require "builder"
 require "fileutils"
 require "loofah"
+require "json"
 
 require_relative "lib/interval_tree"
 include IntervalTree
@@ -23,7 +24,7 @@ Dir.mkdir("#{@published_files}/timestamps") unless File.exist?("#{@published_fil
 SVGZ_COMPRESSION = false
 
 # Set this to true if you've recompiled FFmpeg to enable external references. Writes less data on disk and is faster.
-FFMPEG_REFERENCE_SUPPORT = false
+FFMPEG_REFERENCE_SUPPORT = true
 BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
 
 # Video output quality: 0 is lossless, 51 is the worst. Default 23, 18 - 28 recommended
@@ -36,7 +37,56 @@ VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : 
 REMOVE_REDUNDANT_SHAPES = true
 
 WhiteboardElement = Struct.new(:begin, :end, :value, :id)
-WhiteboardSlide = Struct.new(:href, :begin, :width, :height)
+WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
+
+def add_captions
+  json = JSON.parse(File.read('captions.json'))
+  return if json.length.zero?
+
+  caption_input = ""
+  maps = ""
+  language_names = ""
+
+  (0..json.length - 1).each do |i|
+     caption_input << "-i caption_#{json[i]['locale']}.vtt "
+     maps << "-map #{i + 1} "
+     language_names << "-metadata:s:s:#{i} language=#{json[i]['localeName'].downcase[0..2]} "
+  end
+
+  ffmpeg = system("ffmpeg -i meeting.mp4 #{caption_input} -map 0:v -map 0:a #{maps} -c:v copy -c:a copy -c:s mov_text #{language_names} -y meeting_captioned.mp4")
+  system("mv meeting_captioned.mp4 meeting.mp4") if ffmpeg
+end
+
+def add_chapters(duration, slides)
+  # Extract metadata
+  ffmpeg = system("ffmpeg -i meeting.mp4 -f ffmetadata meeting_metadata")
+
+  slide_number = 0
+  deskshare_number = 0
+
+  chapter = ""
+  slides.each do |slide|
+    if slide.begin >= duration then break end
+    
+    if slide.href.include?("deskshare")
+      title = "Screen sharing #{deskshare_number}"
+      deskshare_number += 1
+    else
+      title = "Slide #{slide_number}"
+      slide_number += 1
+    end
+    
+    chapter << "[CHAPTER]\nSTART=#{slide.begin * 1e9}\nEND=#{slide.end * 1e9}\ntitle=#{title}\n\n"
+  end
+
+  File.open("meeting_metadata", "a") do |file|
+    file << chapter
+  end
+
+  ffmpeg = system("ffmpeg -i meeting.mp4 -i meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y meeting_chapters.mp4")
+
+  system("mv meeting_chapters.mp4 meeting.mp4")
+end
 
 def base64_encode(path)
   data = File.open(path).read
@@ -157,7 +207,7 @@ def parse_whiteboard_shapes(shape_reader)
 
       data = FFMPEG_REFERENCE_SUPPORT ? "file:///#{path}" : base64_encode(path)
 
-      slides << WhiteboardSlide.new(data, slide_in, node.attribute("width").to_f, node.attribute("height"))
+      slides << WhiteboardSlide.new(data, slide_in, slide_out, node.attribute("width").to_f, node.attribute("height"))
     end
 
     next unless node_name == "g" && node_class == "shape"
@@ -348,7 +398,7 @@ def render_cursor(panzooms, cursor_reader)
   end
 end
 
-def render_video
+def render_video(duration)
   # Determine if video had screensharing
   deskshare = File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
 
@@ -377,7 +427,7 @@ def render_video
     "[whiteboard][chat]overlay=y=240[chats];[chats][webcams]overlay' "
   end
 
-  render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y #{@published_files}/meeting.mp4"
+  render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} #{@published_files}/meeting.mp4"
 
   system(render)
 end
@@ -398,13 +448,18 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
 
   # Render the visible frame for each interval
   File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w", 0o600) do |file|
-    slide = slides.first
+    slide_number = 0
+    slide = slides[slide_number]
+    view_box = ""
 
     frames.each do |interval_start, interval_end|
       # Get view_box parameter of the current slide
       _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
 
-      slide = slides.shift if !slides.empty? && interval_start >= slides.first.begin
+      if slide_number < slides.size && interval_start >= slides[slide_number].begin
+        slide = slides[slide_number]
+        slide_number += 1
+      end
 
       draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
       draw = [] if draw.nil?
@@ -460,8 +515,14 @@ def export_presentation
   # Convert whiteboard assets to a format compatible with FFmpeg
   convert_whiteboard_shapes(Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!)
 
+  # Playback duration in seconds
+  duration = Nokogiri::XML(File.open("#{@published_files}/metadata.xml")).xpath('recording/playback/duration').inner_text.to_f / 1000
+
   shapes, slides, timestamps = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
   panzooms, timestamps = parse_panzooms(Nokogiri::XML::Reader(File.open("#{@published_files}/panzooms.xml")), timestamps)
+
+  # Ensure correct recording length - shapes.svg may have incorrect slides after recording ends
+  timestamps = timestamps.select {|t| t <= duration}
 
   # Create video assets
   render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml")))
@@ -473,14 +534,17 @@ def export_presentation
   start = Time.now
 
   puts "Beginning to render video"
-  ffmpeg = render_video
-
+  ffmpeg = render_video(duration)
+  
   puts "Finished with code #{ffmpeg}"
 
+  #add_chapters(duration, slides)
+  #add_captions
+  
   puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{Time.now - start}" if ffmpeg
 end
 
 export_presentation
 
 # Delete the contents of the scratch directories
-FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames", "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg"])
+FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames", "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg", "#{@published_files}/meeting_metadata"])

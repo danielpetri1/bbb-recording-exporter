@@ -1,13 +1,14 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: false
 
-require "nokogiri"
 require "base64"
-require "zlib"
 require "builder"
+require "csv"
 require "fileutils"
-require "loofah"
 require "json"
+require "loofah"
+require "nokogiri"
+require "zlib"
 
 require_relative "lib/interval_tree"
 include IntervalTree
@@ -73,13 +74,15 @@ WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
 
 def add_captions
   json = JSON.parse(File.read('captions.json'))
-  return if json.length.zero?
+  available_captions = json.length
+  
+  return if available_captions.zero?
 
   caption_input = ""
   maps = ""
   language_names = ""
 
-  (0..json.length - 1).each do |i|
+  (0..available_captions - 1).each do |i|
      caption_input << "-i caption_#{json[i]['locale']}.vtt "
      maps << "-map #{i + 1} "
      language_names << "-metadata:s:s:#{i} language=#{json[i]['localeName'].downcase[0..2]} "
@@ -95,13 +98,16 @@ def add_chapters(duration, slides)
 
   slide_number = 1
   deskshare_number = 1
-  
+
   chapter = ""
   slides.each do |slide|
-    break if slide.begin >= duration
+    chapter_start = slide.begin
+    chapter_end = slide.end
 
-    next if (slide.end - slide.begin) <= 0.25
-    
+    break if chapter_start >= duration
+
+    next if (chapter_end - chapter_start) <= 0.25
+
     if slide.href.include?("deskshare")
       title = "Screen sharing #{deskshare_number}"
       deskshare_number += 1
@@ -110,7 +116,7 @@ def add_chapters(duration, slides)
       slide_number += 1
     end
 
-    chapter << "[CHAPTER]\nSTART=#{slide.begin * 1e9}\nEND=#{slide.end * 1e9}\ntitle=#{title}\n\n"
+    chapter << "[CHAPTER]\nSTART=#{chapter_start * 1e9}\nEND=#{chapter_end * 1e9}\ntitle=#{title}\n\n"
   end
 
   File.open("meeting_metadata", "a") do |file|
@@ -154,8 +160,13 @@ def convert_whiteboard_shapes(whiteboard)
     # Convert XHTML to SVG so that text can be shown
     next unless shape.include? "text"
 
+    # Turn style attributes into a hash
+    style_values = Hash[*CSV.parse(style, col_sep: ":", row_sep: ";").flatten]
+
     # The text_color variable may not be required depending on your FFmpeg version
-    text_color = style.split(";").first.split(":")[1].to_s
+    text_color = style_values["color"]
+    font_size = style_values["font-size"].to_f
+
     annotation.set_attribute("style", "#{style};fill:currentcolor")
 
     foreign_object = annotation.xpath("switch/foreignObject")
@@ -163,6 +174,7 @@ def convert_whiteboard_shapes(whiteboard)
     # Obtain X and Y coordinates of the text
     x = foreign_object.attr("x").to_s
     y = foreign_object.attr("y").to_s
+    text_box_width = foreign_object.attr("width").to_s.to_f
 
     text = foreign_object.children.children
 
@@ -174,8 +186,8 @@ def convert_whiteboard_shapes(whiteboard)
         if line == "<br/>"
           builder.tspan(x: x, dy: "0.9em") { builder << "<br/>" }
         else
-          # Make a new line every 40 characters (arbitrary value, SVG does not support auto wrap)
-          line_breaks = line.chars.each_slice(40).map(&:join)
+          # Assumes a width to height aspect ratio of 0.52 for Arial
+          line_breaks = line.chars.each_slice((text_box_width / (font_size * 0.52)).to_i).map(&:join)
 
           line_breaks.each do |row|
             builder.tspan(x: x, dy: "0.9em") { builder << row }
@@ -287,7 +299,7 @@ def render_chat(chat_reader)
     messages << [node.attribute("in").to_f, node.attribute("name"), safe_message.text]
   end
 
-  # Text coordinates on the SVG file - chat window height is 840, + 15 to position text
+  # Text coordinates on the SVG file
   svg_x = 0
   svg_y = CHAT_HEIGHT + CHAT_FONT_SIZE
 
@@ -300,14 +312,39 @@ def render_chat(chat_reader)
   # Create SVG chat with all messages
   # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
   builder = Builder::XmlMarkup.new
-  builder.svg(width: CHAT_CANVAS_WIDTH, height: CHAT_CANVAS_HEIGHT) do
+  builder.svg(width: CHAT_CANVAS_WIDTH, height: CHAT_CANVAS_HEIGHT, 'xmlns' => 'http://www.w3.org/2000/svg') do
     builder.style { builder << "text{font-family: monospace; font-size: #{CHAT_FONT_SIZE}}" }
 
     messages.each do |timestamp, name, chat|
-      line_breaks = chat.chars.each_slice(CHAT_WIDTH / CHAT_FONT_SIZE_X).map(&:join)
+      max_message_length = (CHAT_WIDTH / CHAT_FONT_SIZE_X) - 1
+
+      line_breaks = [-1]
+      line_index = 0
+      last_linebreak_pos = 0
+
+      (0..chat.length - 1).each do |chat_index|
+        last_linebreak_pos = chat_index if chat[chat_index] == " "
+
+        if line_index >= max_message_length
+          last_linebreak_pos = last_linebreak_pos <= chat_index - max_message_length ? chat_index : last_linebreak_pos
+
+          line_breaks << last_linebreak_pos
+
+          line_index = chat_index - last_linebreak_pos - 1
+        end
+
+        line_index += 1
+      end
+
+      line_wraps = []
+      line_breaks.each_cons(2) do |(a, b)|
+        line_wraps << [a + 1, b]
+      end
+
+      line_wraps << [line_breaks.last + 1, chat.length - 1]
 
       # Message height equals the line break amount + the line for the name / time + the empty line afterwards
-      message_height = (line_breaks.size + 2) * CHAT_FONT_SIZE
+      message_height = (line_wraps.size + 2) * CHAT_FONT_SIZE
 
       if svg_y + message_height > CHAT_CANVAS_HEIGHT
         svg_y = CHAT_HEIGHT + CHAT_FONT_SIZE
@@ -326,8 +363,8 @@ def render_chat(chat_reader)
       svg_y += CHAT_FONT_SIZE
 
       # Message text
-      line_breaks.each do |line|
-        builder.text(x: svg_x, y: svg_y) { builder << line.to_s }
+      line_wraps.each do |a, b|
+        builder.text(x: svg_x, y: svg_y) { builder << chat[a..b] }
         svg_y += CHAT_FONT_SIZE
       end
 
@@ -549,7 +586,7 @@ def export_presentation
   convert_whiteboard_shapes(Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!)
 
   metadata = Nokogiri::XML(File.open("#{@published_files}/metadata.xml"))
-  
+
   # Playback duration in seconds
   duration = metadata.xpath('recording/playback/duration').inner_text.to_f / 1000
   meeting_name = metadata.xpath('recording/meta/meetingName').inner_text
@@ -568,7 +605,6 @@ def export_presentation
   puts "Finished composing presentation. Total: #{Time.now - start}"
 
   start = Time.now
-
   puts "Beginning to render video"
   ffmpeg = render_video(duration, meeting_name)
 
@@ -583,5 +619,5 @@ end
 export_presentation
 
 # Delete the contents of the scratch directories
-FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames", "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg",
-                 "#{@published_files}/meeting_metadata"])
+# FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames", "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg",
+#                 "#{@published_files}/meeting_metadata"])

@@ -35,7 +35,7 @@ end
 # Video: 'video/webcams.mp4', 'deskshare/deskshare.mp4'
 # Chat: 'slides_new.xml'
 
-['shapes.svg', 'cursor.xml', 'panzooms.xml', 'presentation_text.json', 'captions.json', 'metadata.xml', 'video/webcams.mp4', 'deskshare/deskshare.mp4', 'slides_new.xml'].each do |get|
+['shapes.svg', 'cursor.xml', 'panzooms.xml', 'presentation_text.json', 'captions.json', 'metadata.xml', 'video/webcams.webm', 'slides_new.xml'].each do |get|
   download(get)
 end
 

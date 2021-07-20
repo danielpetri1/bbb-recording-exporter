@@ -306,7 +306,7 @@ def render_chat(chat_reader)
     messages.each do |timestamp, name, chat|
       line_breaks = chat.chars.each_slice(CHAT_WIDTH / CHAT_FONT_SIZE_X).map(&:join)
 
-      # Message height equals the line break amount + the line for the name / time + the empty line after
+      # Message height equals the line break amount + the line for the name / time + the empty line afterwards
       message_height = (line_breaks.size + 2) * CHAT_FONT_SIZE
 
       if svg_y + message_height > CHAT_CANVAS_HEIGHT
@@ -397,8 +397,8 @@ def render_cursor(panzooms, cursor_reader)
       cursor_y = pointer[1].to_f * height
 
       # Scaling required to reach target dimensions
-      x_scale = 1600 / width
-      y_scale = 1080 / height
+      x_scale = SLIDES_WIDTH / width
+      y_scale = SLIDES_HEIGHT / height
 
       # Keep aspect ratio
       scale_factor = [x_scale, y_scale].min
@@ -408,8 +408,8 @@ def render_cursor(panzooms, cursor_reader)
       cursor_y *= scale_factor
 
       # Translate given difference to new on-screen dimensions
-      x_offset = (1600 - scale_factor * width) / 2
-      y_offset = (1080 - scale_factor * height) / 2
+      x_offset = (SLIDES_WIDTH - scale_factor * width) / 2
+      y_offset = (SLIDES_HEIGHT - scale_factor * height) / 2
 
       # Center cursor
       cursor_x -= 8
@@ -419,7 +419,7 @@ def render_cursor(panzooms, cursor_reader)
       cursor_y += y_offset
 
       # Move whiteboard to the right, making space for the chat and webcams
-      cursor_x += 320
+      cursor_x += WEBCAMS_WIDTH
 
       # Writes the timestamp and position down
       file.puts "#{timestamp} overlay@m x #{cursor_x.round(3)}, overlay@m y #{cursor_y.round(3)};"
@@ -518,7 +518,7 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
   builder = Builder::XmlMarkup.new
 
   # FFmpeg requires the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
-  builder.svg(width: "1600", height: "1080", viewBox: view_box, "xmlns:xlink" => "http://www.w3.org/1999/xlink", 'xmlns' => 'http://www.w3.org/2000/svg') do
+  builder.svg(width: SLIDES_WIDTH, height: SLIDES_HEIGHT, viewBox: view_box, "xmlns:xlink" => "http://www.w3.org/1999/xlink", 'xmlns' => 'http://www.w3.org/2000/svg') do
     # Display background image
     builder.image('xlink:href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
 

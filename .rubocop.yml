@@ -118,9 +118,9 @@ Metrics/PerceivedComplexity:
 Metrics/ClassLength:
   Enabled: false
 
-# Limit lines to 80 characters.
+# Limit lines to 120 characters.
 Layout/LineLength:
-  Max: 200
+  Max: 120
 
 # Avoid methods longer than 10 lines of code.
 Metrics/MethodLength:

@@ -43,11 +43,11 @@ FFmpeg compiled with `--enable-librsvg` and `--enable-libx264` <br  />
 Ruby with the Nokogiri and Loofah gems installed <br  />
 
 ###  Rendering options 
-If your server runs BBB 2.2 or earlier, it is advised to set the flag `REMOVE_REDUNDANT_SHAPES` to **true** in `render_whiteboard.rb`. This will ensure the live whiteboard feature is still supported, require less storage space and increase rendering speeds.
+If your server runs BBB 2.2 or earlier, it is advised to set the flag `REMOVE_REDUNDANT_SHAPES` to **true** in `export_presentation.rb`. This will ensure the live whiteboard feature is still supported, require less storage space and increase rendering speeds.
 
 Less data can be written on the disk by turning `SVGZ_COMPRESSION` on.
 
-To make rendering faster and less resource-intensive, download FFMpeg's source code and replace the file `ffmpeg/libavcodec/librsvgdec.c` with the one in this directory. After compiling and installing FFMpeg, enable `FFMPEG_REFERENCE_SUPPORT` in `render_whiteboard.rb` .
+To make rendering faster and less resource-intensive, download FFMpeg's source code and replace the file `ffmpeg/libavcodec/librsvgdec.c` with the one in this directory. After compiling and installing FFMpeg, enable `FFMPEG_REFERENCE_SUPPORT` in `export_presentation.rb` .
 
 The video output quality can be controlled with the `CONSTANT_RATE_FACTOR`.
 

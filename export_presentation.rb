@@ -25,7 +25,7 @@ Dir.mkdir("#{@published_files}/timestamps") unless File.exist?("#{@published_fil
 SVGZ_COMPRESSION = false
 
 # Set this to true if you've recompiled FFmpeg to enable external references. Writes less data on disk and is faster.
-FFMPEG_REFERENCE_SUPPORT = true
+FFMPEG_REFERENCE_SUPPORT = false
 BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
 
 # Video output quality: 0 is lossless, 51 is the worst. Default 23, 18 - 28 recommended
@@ -35,7 +35,7 @@ FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
 
 # Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
-REMOVE_REDUNDANT_SHAPES = true
+REMOVE_REDUNDANT_SHAPES = false
 
 BENCHMARK = true ? "-benchmark " : ""
 
@@ -334,12 +334,13 @@ def render_chat(chat_reader)
   # Create SVG chat with all messages
   # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
   builder = Builder::XmlMarkup.new
+  builder.instruct!
   builder.svg(width: CHAT_CANVAS_WIDTH, height: CHAT_CANVAS_HEIGHT, 'xmlns' => 'http://www.w3.org/2000/svg') do
     builder.style { builder << "text{font-family: monospace; font-size: #{CHAT_FONT_SIZE}}" }
 
     messages.each do |timestamp, name, chat|
       # Strip HTML tags e.g. from links so it only displays the inner text
-      chat = Loofah.fragment(chat).scrub!(:strip).text
+      chat = Loofah.fragment(chat).scrub!(:strip).text.unicode_normalize
 
       max_message_length = (CHAT_WIDTH / CHAT_FONT_SIZE_X) - 1
 

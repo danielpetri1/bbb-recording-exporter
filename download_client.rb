@@ -10,7 +10,7 @@ def download(file)
   # Format: "https://hostname/presentation/meetingID/#{file}"
 
   path = "https://hostname/presentation/meetingID/#{file}"
-  
+
   puts "Downloading #{path}"
 
   File.open(file, 'wb') do |get|

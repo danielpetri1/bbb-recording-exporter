@@ -231,17 +231,17 @@ end
 
 def unique_slides(slides)
   # Only keep the last state of the slides, maintaining original order
-  for i in 0..slides.size - 1 do
-    for j in (i + 1)..slides.size - 1 do
+  (0..slides.size - 1).each do |i|
+    ((i + 1)..slides.size - 1).each do |j|
       next if slides[i].nil? || slides[j].nil?
-      if slides[i].href == slides[j].href then
+      if slides[i].href == slides[j].href
         slides[i] = slides[j]
         slides[j] = nil
       end
     end
   end
 
-  return slides.compact
+  slides.compact
 end
 
 def export_pdf

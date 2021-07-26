@@ -22,10 +22,6 @@ Dir.mkdir("#{@published_files}/presentation") unless File.exist?("#{@published_f
 # Setting the SVGZ option to true will write less data on the disk.
 SVGZ_COMPRESSION = false
 
-# Set this to true if the svg to pdf converter supports external references
-REFERENCE_SUPPORT = false
-BASE_URI = REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
-
 FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 
 # Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
@@ -35,6 +31,8 @@ WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
 
 def base64_encode(path)
+  return "" if File.directory?(path)
+
   data = File.open(path).read
   "data:image/#{File.extname(path).delete('.')};base64,#{Base64.strict_encode64(data)}"
 end
@@ -58,7 +56,7 @@ def convert_whiteboard_shapes(whiteboard)
       # Namespace xmlns:xlink is required by FFmpeg
       poll.add_namespace_definition("xlink", "http://www.w3.org/1999/xlink")
 
-      data = REFERENCE_SUPPORT ? "file:///#{path}" : base64_encode(path)
+      data = base64_encode(path)
 
       poll.set_attribute("xlink:href", data)
     end
@@ -137,7 +135,7 @@ def parse_whiteboard_shapes(shape_reader)
 
       next if path.include?('deskshare')
 
-      data = REFERENCE_SUPPORT ? "file:///#{path}" : base64_encode(path)
+      data = base64_encode(path)
 
       slides << WhiteboardSlide.new(data, slide_in, slide_out, node.attribute("width").to_f, node.attribute("height"))
     end

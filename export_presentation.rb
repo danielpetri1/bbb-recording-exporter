@@ -148,6 +148,8 @@ def add_chapters(duration, slides)
 end
 
 def base64_encode(path)
+  return "" if File.directory?(path)
+
   data = File.open(path).read
   "data:image/#{File.extname(path).delete('.')};base64,#{Base64.strict_encode64(data)}"
 end
@@ -209,7 +211,8 @@ def convert_whiteboard_shapes(whiteboard)
           line_breaks = line.chars.each_slice((text_box_width / (font_size * 0.52)).to_i).map(&:join)
 
           line_breaks.each do |row|
-            builder.tspan(x: x, dy: "0.9em") { builder << row }
+            safe_message = Loofah.fragment(row).scrub!(:escape).text.unicode_normalize
+            builder.tspan(x: x, dy: "0.9em") { builder << safe_message }
           end
         end
       end

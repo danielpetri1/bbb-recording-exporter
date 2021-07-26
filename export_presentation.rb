@@ -52,10 +52,10 @@ CONSTANT_RATE_FACTOR = 23
 FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
 
-# Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
+# Set this to true if the whiteboard supports whiteboard animations
 REMOVE_REDUNDANT_SHAPES = false
 
-BENCHMARK = true ? "-benchmark " : ""
+BENCHMARK = false ? "-benchmark " : ""
 
 # Output video size
 OUTPUT_WIDTH = 1920
@@ -92,7 +92,7 @@ WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
 
 def add_captions
-  json = JSON.parse(File.read('captions.json'))
+  json = JSON.parse(File.read("#{@published_files}/captions.json"))
 
   return if json.length.zero?
 
@@ -101,19 +101,19 @@ def add_captions
   language_names = ""
 
   (0..json.length - 1).each do |i|
-     caption_input << "-i caption_#{json[i]['locale']}.vtt "
+     caption_input << "-i #{@published_files}/caption_#{json[i]['locale']}.vtt "
      maps << "-map #{i + 1} "
      language_names << "-metadata:s:s:#{i} language=#{json[i]['localeName'].downcase[0..2]} "
   end
 
-  render = "ffmpeg -i meeting.mp4 #{caption_input} " \
+  render = "ffmpeg -i #{@published_files}/meeting.mp4 #{caption_input} " \
             "-map 0:v -map 0:a #{maps} -c:v copy -c:a copy -c:s mov_text #{language_names} " \
-            "-y meeting_captioned.mp4"
+            "-y #{@published_files}/meeting_captioned.mp4"
 
   ffmpeg = system(render)
 
   if ffmpeg
-    FileUtils.mv("meeting_captioned.mp4", "meeting.mp4")
+    FileUtils.mv("#{@published_files}/meeting_captioned.mp4", "#{@published_files}/meeting.mp4")
   else
       warn("An error occurred adding the captions to the video.")
       exit(false)
@@ -122,7 +122,7 @@ end
 
 def add_chapters(duration, slides)
   # Extract metadata
-  ffmpeg = system("ffmpeg -i meeting.mp4 -f ffmetadata meeting_metadata")
+  ffmpeg = system("ffmpeg -i #{@published_files}/meeting.mp4 -y -f ffmetadata #{@published_files}/meeting_metadata")
 
   unless ffmpeg
     warn("An error occurred extracting the video's metadata.")
@@ -156,9 +156,9 @@ def add_chapters(duration, slides)
     file << chapter
   end
 
-  ffmpeg = system("ffmpeg -i meeting.mp4 -i meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y -t #{duration} meeting_chapters.mp4")
+  ffmpeg = system("ffmpeg -i #{@published_files}/meeting.mp4 -i #{@published_files}/meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y -t #{duration} #{@published_files}/meeting_chapters.mp4")
   if ffmpeg
-    FileUtils.mv("meeting_chapters.mp4", "meeting.mp4")
+    FileUtils.mv("#{@published_files}/meeting_chapters.mp4", "#{@published_files}/meeting.mp4")
   else
     warn("Failed to add the chapters to the video.")
     exit(false)
@@ -638,8 +638,6 @@ def export_presentation
   # Benchmark
   start = Time.now
 
-  puts "Started composing presentation"
-
   # Convert whiteboard assets to a format compatible with FFmpeg
   convert_whiteboard_shapes(Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!)
 
@@ -662,16 +660,16 @@ def export_presentation
   render_cursor(panzooms, Nokogiri::XML::Reader(File.open("#{@published_files}/cursor.xml")))
   render_whiteboard(panzooms, slides, shapes, timestamps)
 
-  puts "Finished composing presentation. Total: #{Time.now - start}"
+  BigBlueButton.logger.info("Finished composing presentation. Time: #{Time.now - start}")
 
   start = Time.now
-  puts "Beginning to render video"
+  BigBlueButton.logger.info("Starting to export video")
 
   render_video(duration, meeting_name)
   add_chapters(duration, slides)
   add_captions
 
-  puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{Time.now - start}" if ffmpeg
+  BigBlueButton.logger.info("Exported recording available at #{@published_files}/meeting.mp4. Rendering took: #{Time.now - start}")
 end
 
 export_presentation

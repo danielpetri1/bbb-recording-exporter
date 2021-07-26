@@ -6,9 +6,10 @@ require File.expand_path('../../../lib/recordandplayback', __FILE__)
 
 require "nokogiri"
 require "base64"
-require "zlib"
 require "builder"
+require "csv"
 require "fileutils"
+require "json"
 require "loofah"
 require "/usr/local/bigbluebutton/core/lib/recordandplayback/interval_tree"
 
@@ -54,10 +55,119 @@ VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : 
 # Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
 REMOVE_REDUNDANT_SHAPES = false
 
+BENCHMARK = true ? "-benchmark " : ""
+
+# Output video size
+OUTPUT_WIDTH = 1920
+OUTPUT_HEIGHT = 1080
+
+# Playback layout
+WEBCAMS_WIDTH = 320
+WEBCAMS_HEIGHT = 240
+
+CHAT_WIDTH = WEBCAMS_WIDTH
+CHAT_HEIGHT = OUTPUT_HEIGHT - WEBCAMS_HEIGHT
+
+# Assumes a monospaced font with a width to aspect ratio of 3:5
+CHAT_FONT_SIZE = 15
+CHAT_FONT_SIZE_X = (0.6 * CHAT_FONT_SIZE).to_i
+
+# Max. dimensions supported: 8032 x 32767
+CHAT_CANVAS_WIDTH = (8032 / CHAT_WIDTH) * CHAT_WIDTH
+CHAT_CANVAS_HEIGHT = (32_767 / CHAT_FONT_SIZE) * CHAT_FONT_SIZE
+
+# Dimensions of the whiteboard area
+SLIDES_WIDTH = OUTPUT_WIDTH - WEBCAMS_WIDTH
+SLIDES_HEIGHT = OUTPUT_HEIGHT
+
+# Input deskshare dimensions. Is scaled to fit whiteboard area keeping aspect ratio
+DESKSHARE_INPUT_WIDTH = 1280
+DESKSHARE_INPUT_HEIGHT = 720
+
+# Center the deskshare
+DESKSHARE_Y_OFFSET = ((SLIDES_HEIGHT - ([SLIDES_WIDTH.to_f / DESKSHARE_INPUT_WIDTH,
+                                         SLIDES_HEIGHT.to_f / DESKSHARE_INPUT_HEIGHT].min * DESKSHARE_INPUT_HEIGHT)) / 2).to_i
+
 WhiteboardElement = Struct.new(:begin, :end, :value, :id)
-WhiteboardSlide = Struct.new(:href, :begin, :width, :height)
+WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
+
+def add_captions
+  json = JSON.parse(File.read('captions.json'))
+
+  return if json.length.zero?
+
+  caption_input = ""
+  maps = ""
+  language_names = ""
+
+  (0..json.length - 1).each do |i|
+     caption_input << "-i caption_#{json[i]['locale']}.vtt "
+     maps << "-map #{i + 1} "
+     language_names << "-metadata:s:s:#{i} language=#{json[i]['localeName'].downcase[0..2]} "
+  end
+
+  render = "ffmpeg -i meeting.mp4 #{caption_input} " \
+            "-map 0:v -map 0:a #{maps} -c:v copy -c:a copy -c:s mov_text #{language_names} " \
+            "-y meeting_captioned.mp4"
+
+  ffmpeg = system(render)
+
+  if ffmpeg
+    FileUtils.mv("meeting_captioned.mp4", "meeting.mp4")
+  else
+      warn("An error occurred adding the captions to the video.")
+      exit(false)
+  end
+end
+
+def add_chapters(duration, slides)
+  # Extract metadata
+  ffmpeg = system("ffmpeg -i meeting.mp4 -f ffmetadata meeting_metadata")
+
+  unless ffmpeg
+    warn("An error occurred extracting the video's metadata.")
+    exit(false)
+  end
+
+  slide_number = 1
+  deskshare_number = 1
+
+  chapter = ""
+  slides.each do |slide|
+    chapter_start = slide.begin
+    chapter_end = slide.end
+
+    break if chapter_start >= duration
+
+    next if (chapter_end - chapter_start) <= 0.25
+
+    if slide.href.include?("deskshare")
+      title = "Screen sharing #{deskshare_number}"
+      deskshare_number += 1
+    else
+      title = "Slide #{slide_number}"
+      slide_number += 1
+    end
+
+    chapter << "[CHAPTER]\nSTART=#{chapter_start * 1e9}\nEND=#{chapter_end * 1e9}\ntitle=#{title}\n\n"
+  end
+
+  File.open("meeting_metadata", "a") do |file|
+    file << chapter
+  end
+
+  ffmpeg = system("ffmpeg -i meeting.mp4 -i meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y -t #{duration} meeting_chapters.mp4")
+  if ffmpeg
+    FileUtils.mv("meeting_chapters.mp4", "meeting.mp4")
+  else
+    warn("Failed to add the chapters to the video.")
+    exit(false)
+  end
+end
 
 def base64_encode(path)
+  return "" if File.directory?(path)
+
   data = File.open(path).read
   "data:image/#{File.extname(path).delete('.')};base64,#{Base64.strict_encode64(data)}"
 end
@@ -70,8 +180,9 @@ def convert_whiteboard_shapes(whiteboard)
     style.sub! "visibility:hidden", ""
     annotation.set_attribute("style", style)
 
+    shape = annotation.attribute("shape").to_s
     # Convert polls to data schema
-    if annotation.attribute("shape").to_s.include? "poll"
+    if shape.include? "poll"
       poll = annotation.element_children.first
 
       path = "#{@published_files}/#{poll.attribute('href')}"
@@ -86,34 +197,40 @@ def convert_whiteboard_shapes(whiteboard)
     end
 
     # Convert XHTML to SVG so that text can be shown
-    next unless annotation.attribute("shape").to_s.include? "text"
+    next unless shape.include? "text"
 
-    # Change text style so color is rendered
-    text_style = annotation.attr("style")
+    # Turn style attributes into a hash
+    style_values = Hash[*CSV.parse(style, col_sep: ":", row_sep: ";").flatten]
 
     # The text_color variable may not be required depending on your FFmpeg version
-    text_color = text_style.split(";").first.split(":")[1]
-    annotation.set_attribute("style", "#{text_style};fill:currentcolor")
+    text_color = style_values["color"]
+    font_size = style_values["font-size"].to_f
+
+    annotation.set_attribute("style", "#{style};fill:currentcolor")
 
     foreign_object = annotation.xpath("switch/foreignObject")
 
     # Obtain X and Y coordinates of the text
     x = foreign_object.attr("x").to_s
     y = foreign_object.attr("y").to_s
+    text_box_width = foreign_object.attr("width").to_s.to_f
 
     text = foreign_object.children.children
 
     builder = Builder::XmlMarkup.new
-    builder.text(x: x.to_s, y: y.to_s, fill: text_color.to_s, "xml:space" => "preserve") do
+    builder.text(x: x, y: y, fill: text_color, "xml:space" => "preserve") do
       text.each do |line|
-        if line.to_s == "<br/>"
-          builder.tspan(x: x.to_s, dy: "0.9em") { builder << "<br/>" }
+        line = line.to_s
+
+        if line == "<br/>"
+          builder.tspan(x: x, dy: "0.9em") { builder << "<br/>" }
         else
-          # Make a new line every 40 characters (arbitrary value, SVG does not support auto wrap)
-          line_breaks = line.to_s.chars.each_slice(40).map(&:join)
+          # Assumes a width to height aspect ratio of 0.52 for Arial
+          line_breaks = line.chars.each_slice((text_box_width / (font_size * 0.52)).to_i).map(&:join)
 
           line_breaks.each do |row|
-            builder.tspan(x: x.to_s, dy: "0.9em") { builder << row }
+            safe_message = Loofah.fragment(row).scrub!(:escape).text.unicode_normalize
+            builder.tspan(x: x, dy: "0.9em") { builder << safe_message }
           end
         end
       end
@@ -126,56 +243,60 @@ def convert_whiteboard_shapes(whiteboard)
   end
 
   # Save new shapes.svg copy
-  File.open("#{@published_files}/shapes_modified.svg", "w") do |file|
+  File.open("#{@published_files}/shapes_modified.svg", "w", 0o600) do |file|
     file.write(whiteboard)
   end
 end
 
-def parse_panzooms(pan_reader)
+def parse_panzooms(pan_reader, timestamps)
   panzooms = []
   timestamp = 0
 
   pan_reader.each do |node|
     next unless node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    node_name = node.name
 
-    timestamp = node.attribute("timestamp").to_f if node.name == "event"
+    timestamp = node.attribute("timestamp").to_f if node_name == "event"
 
-    if node.name == "viewBox"
+    if node_name == "viewBox"
       panzooms << [timestamp, node.inner_xml]
-      @timestamps << timestamp
+      timestamps << timestamp
     end
   end
 
-  panzooms
+  [panzooms, timestamps]
 end
 
 def parse_whiteboard_shapes(shape_reader)
   slide_in = 0
   slide_out = 0
 
-  timestamps = []
-  slides = []
   shapes = []
+  slides = []
+  timestamps = []
 
   shape_reader.each do |node|
     next unless node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
 
-    if node.name == "image" && node.attribute("class") == "slide"
+    node_name = node.name
+    node_class = node.attribute("class")
+
+    if node_name == "image" && node_class == "slide"
       slide_in = node.attribute("in").to_f
       slide_out = node.attribute("out").to_f
 
-      timestamps << node.attribute("in").to_f
-      timestamps << node.attribute("out").to_f
+      timestamps << slide_in
+      timestamps << slide_out
 
       # Image paths need to follow the URI Data Scheme (for slides and polls)
       path = "#{@published_files}/#{node.attribute('href')}"
 
       data = FFMPEG_REFERENCE_SUPPORT ? "file:///#{path}" : base64_encode(path)
 
-      slides << WhiteboardSlide.new(data, slide_in, node.attribute("width").to_f, node.attribute("height"))
+      slides << WhiteboardSlide.new(data, slide_in, slide_out, node.attribute("width").to_f, node.attribute("height"))
     end
 
-    next unless node.name == "g" && node.attribute("class") == "shape"
+    next unless node_name == "g" && node_class == "shape"
 
     shape_timestamp = node.attribute("timestamp").to_f
     shape_undo = node.attribute("undo").to_f
@@ -194,25 +315,36 @@ def parse_whiteboard_shapes(shape_reader)
     shapes << WhiteboardElement.new(shape_enter, shape_leave, xml, id)
   end
 
-  [timestamps, slides, shapes]
+  [shapes, slides, timestamps]
+end
+
+def remove_adjacent(array)
+  index = 0
+
+  until array[index + 1].nil?
+    array[index] = nil if array[index].id == array[index + 1].id
+    index += 1
+  end
+
+  array.compact
 end
 
 def render_chat(chat_reader)
   messages = []
 
   chat_reader.each do |node|
-    next unless node.name == "chattimeline" && node.attribute("target") == "chat" && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
-    # Scrub message to prevent HTML e.g. from links from breaking XML Builder
-    safe_message = Loofah.fragment(node.attribute("message")).scrub!(:strip)
-    messages << [node.attribute("in").to_f, node.attribute("name"), safe_message.text]
+    unless node.name == "chattimeline" &&
+           node.attribute("target") == "chat" &&
+           node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+      next
+    end
+
+    messages << [node.attribute("in").to_f, node.attribute("name"), node.attribute("message")]
   end
 
-  # Text coordinates on the SVG file - chat window height is 840, + 15 to position text
+  # Text coordinates on the SVG file
   svg_x = 0
-  svg_y = 855
-
-  svg_width = 8000 # Divisible by 320
-  svg_height = 32_760 # Divisible by 15
+  svg_y = CHAT_HEIGHT + CHAT_FONT_SIZE
 
   # Chat viewbox coordinates
   chat_x = 0
@@ -221,27 +353,51 @@ def render_chat(chat_reader)
   overlay_position = []
 
   # Create SVG chat with all messages
-  # Max. dimensions: 8032 x 32767
   # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
   builder = Builder::XmlMarkup.new
-  builder.svg(width: svg_width, height: svg_height) do
-    builder.style { builder << "text{font-family: monospace; font-size: 15}" }
+  builder.instruct!
+  builder.svg(width: CHAT_CANVAS_WIDTH, height: CHAT_CANVAS_HEIGHT, 'xmlns' => 'http://www.w3.org/2000/svg') do
+    builder.style { builder << "text{font-family: monospace; font-size: #{CHAT_FONT_SIZE}}" }
 
-    messages.each do |message|
-      timestamp = message[0]
-      name = message[1]
-      chat = message[2]
+    messages.each do |timestamp, name, chat|
+      # Strip HTML tags e.g. from links so it only displays the inner text
+      chat = Loofah.fragment(chat).scrub!(:strip).text.unicode_normalize
 
-      line_breaks = chat.chars.each_slice(35).map(&:join)
+      max_message_length = (CHAT_WIDTH / CHAT_FONT_SIZE_X) - 1
 
-      # Message height equals the line break amount + the line for the name / time + the empty line after
-      message_height = (line_breaks.size + 2) * 15
+      line_breaks = [-1]
+      line_index = 0
+      last_linebreak_pos = 0
 
-      if svg_y + message_height > svg_height
-        svg_y = 855
-        svg_x += 320
+      (0..chat.length - 1).each do |chat_index|
+        last_linebreak_pos = chat_index if chat[chat_index] == " "
 
-        chat_x += 320
+        if line_index >= max_message_length
+          last_linebreak_pos = last_linebreak_pos <= chat_index - max_message_length ? chat_index : last_linebreak_pos
+
+          line_breaks << last_linebreak_pos
+
+          line_index = chat_index - last_linebreak_pos - 1
+        end
+
+        line_index += 1
+      end
+
+      line_wraps = []
+      line_breaks.each_cons(2) do |(a, b)|
+        line_wraps << [a + 1, b]
+      end
+
+      line_wraps << [line_breaks.last + 1, chat.length - 1]
+
+      # Message height equals the line break amount + the line for the name / time + the empty line afterwards
+      message_height = (line_wraps.size + 2) * CHAT_FONT_SIZE
+
+      if svg_y + message_height > CHAT_CANVAS_HEIGHT
+        svg_y = CHAT_HEIGHT + CHAT_FONT_SIZE
+        svg_x += CHAT_WIDTH
+
+        chat_x += CHAT_WIDTH
         chat_y = message_height
       else
         chat_y += message_height
@@ -250,32 +406,33 @@ def render_chat(chat_reader)
       overlay_position << [timestamp, chat_x, chat_y]
 
       # Username and chat timestamp
-      builder.text(x: svg_x.to_s, y: svg_y.to_s, "font-weight" => "bold") { builder << "#{name}    #{Time.at(timestamp.to_f.round(0)).utc.strftime('%H:%M:%S')}" }
-      svg_y += 15
+      builder.text(x: svg_x, y: svg_y, "font-weight" => "bold") {
+        builder << "#{name}    #{Time.at(timestamp.to_f.round(0)).utc.strftime('%H:%M:%S')}"
+      }
+      svg_y += CHAT_FONT_SIZE
 
       # Message text
-      line_breaks.each do |line|
-        builder.text(x: svg_x.to_s, y: svg_y.to_s) { builder << line.to_s }
-        svg_y += 15
+      line_wraps.each do |a, b|
+        safe_message = Loofah.fragment(chat[a..b]).scrub!(:escape)
+
+        builder.text(x: svg_x, y: svg_y) { builder << safe_message }
+        svg_y += CHAT_FONT_SIZE
       end
 
-      svg_y += 15
+      svg_y += CHAT_FONT_SIZE
     end
   end
 
   # Saves chat as SVG / SVGZ file
-  File.open("#{@published_files}/chats/chat.svg", "w") do |file|
+  File.open("#{@published_files}/chats/chat.svg", "w", 0o600) do |file|
     file.write(builder.target!)
   end
 
-  File.open("#{@published_files}/timestamps/chat_timestamps", "w") do |file|
+  File.open("#{@published_files}/timestamps/chat_timestamps", "w", 0o600) do |file|
     file.puts "0 overlay@msg x 0, overlay@msg y 0;" if overlay_position.empty?
 
-    overlay_position.each do |chat_state|
-      chat_x = chat_state[1]
-      chat_y = chat_state[2]
-
-      file.puts "#{chat_state[0]} crop@c x #{chat_x}, crop@c y #{chat_y};"
+    overlay_position.each do |timestamp, x, y|
+      file.puts "#{timestamp} crop@c x #{x}, crop@c y #{y};"
     end
   end
 end
@@ -289,25 +446,30 @@ def render_cursor(panzooms, cursor_reader)
     builder.circle(cx: "8", cy: "8", r: "8", fill: "red")
   end
 
-  File.open("#{@published_files}/cursor/cursor.svg", "w") do |svg|
+  File.open("#{@published_files}/cursor/cursor.svg", "w", 0o600) do |svg|
     svg.write(builder.target!)
   end
 
   cursor = []
-  view_box = "0 0 1600 900"
   timestamps = []
+  view_box = ""
 
   cursor_reader.each do |node|
-    timestamps << node.attribute("timestamp").to_f if node.name == "event" && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    node_name = node.name
+    next unless node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
 
-    cursor << node.inner_xml if node.name == "cursor" && node.node_type == Nokogiri::XML::Reader::TYPE_ELEMENT
+    timestamps << node.attribute("timestamp").to_f if node_name == "event"
+
+    cursor << node.inner_xml if node_name == "cursor"
   end
 
   panzoom_index = 0
-  File.open("#{@published_files}/timestamps/cursor_timestamps", "w") do |file|
+  File.open("#{@published_files}/timestamps/cursor_timestamps", "w", 0o600) do |file|
     timestamps.each.with_index do |timestamp, frame_number|
-      if panzoom_index < panzooms.length && timestamp >= panzooms[panzoom_index].first
-        _, view_box = panzooms[panzoom_index]
+      panzoom = panzooms[panzoom_index]
+
+      if panzoom_index < panzooms.length && timestamp >= panzoom.first
+        _, view_box = panzoom
         panzoom_index += 1
         view_box = view_box.split
       end
@@ -323,8 +485,8 @@ def render_cursor(panzooms, cursor_reader)
       cursor_y = pointer[1].to_f * height
 
       # Scaling required to reach target dimensions
-      x_scale = 1600 / width
-      y_scale = 1080 / height
+      x_scale = SLIDES_WIDTH / width
+      y_scale = SLIDES_HEIGHT / height
 
       # Keep aspect ratio
       scale_factor = [x_scale, y_scale].min
@@ -334,8 +496,8 @@ def render_cursor(panzooms, cursor_reader)
       cursor_y *= scale_factor
 
       # Translate given difference to new on-screen dimensions
-      x_offset = (1600 - scale_factor * width) / 2
-      y_offset = (1080 - scale_factor * height) / 2
+      x_offset = (SLIDES_WIDTH - scale_factor * width) / 2
+      y_offset = (SLIDES_HEIGHT - scale_factor * height) / 2
 
       # Center cursor
       cursor_x -= 8
@@ -345,7 +507,7 @@ def render_cursor(panzooms, cursor_reader)
       cursor_y += y_offset
 
       # Move whiteboard to the right, making space for the chat and webcams
-      cursor_x += 320
+      cursor_x += WEBCAMS_WIDTH
 
       # Writes the timestamp and position down
       file.puts "#{timestamp} overlay@m x #{cursor_x.round(3)}, overlay@m y #{cursor_y.round(3)};"
@@ -353,12 +515,105 @@ def render_cursor(panzooms, cursor_reader)
   end
 end
 
+def render_video(duration, meeting_name)
+  # Determine if video had screensharing
+  deskshare = File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
+
+  render = "ffmpeg -f lavfi -i color=c=white:s=#{OUTPUT_WIDTH}x#{OUTPUT_HEIGHT} " \
+          "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
+          "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg " \
+          "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
+          "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} "
+
+  render << if deskshare
+    "-i #{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION} -filter_complex " \
+    "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
+    "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=#{CHAT_WIDTH}:h=#{CHAT_HEIGHT}:x=0:y=0[chat];" \
+    "[4]scale=w=#{WEBCAMS_WIDTH}:h=#{WEBCAMS_HEIGHT}[webcams];[5]scale=w=#{SLIDES_WIDTH}:h=#{SLIDES_HEIGHT}:force_original_aspect_ratio=1[deskshare];" \
+    "[0][deskshare]overlay=x=#{WEBCAMS_WIDTH}:y=#{DESKSHARE_Y_OFFSET}[screenshare];" \
+    "[screenshare][1]overlay=x=#{WEBCAMS_WIDTH}[slides];" \
+    "[slides][cursor]overlay@m[whiteboard];" \
+    "[whiteboard][chat]overlay=y=#{WEBCAMS_HEIGHT}[chats];" \
+    "[chats][webcams]overlay' "
+  else
+    "-filter_complex '[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
+    "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=#{CHAT_WIDTH}:h=#{CHAT_HEIGHT}:x=0:y=0[chat];" \
+    "[4]scale=w=#{WEBCAMS_WIDTH}:h=#{WEBCAMS_HEIGHT}[webcams];" \
+    "[0][1]overlay=x=#{WEBCAMS_WIDTH}[slides];" \
+    "[slides][cursor]overlay@m[whiteboard];" \
+    "[whiteboard][chat]overlay=y=#{WEBCAMS_HEIGHT}[chats];[chats][webcams]overlay' "
+  end
+
+  render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} "
+  render << "-metadata title='#{meeting_name}' #{BENCHMARK} #{@published_files}/meeting.mp4"
+
+  ffmpeg = system(render)
+
+  unless ffmpeg
+    warn("An error occurred rendering the video.")
+    exit(false)
+  end
+end
+
+def render_whiteboard(panzooms, slides, shapes, timestamps)
+  shapes_interval_tree = IntervalTree::Tree.new(shapes)
+
+  # Create frame intervals with starting time 0
+  intervals = timestamps.uniq.sort
+  intervals = intervals.drop(1) if intervals.first == -1
+
+  frame_number = 0
+  frames = []
+
+  intervals.each_cons(2) do |(a, b)|
+    frames << [a, b]
+  end
+
+  # Render the visible frame for each interval
+  File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w", 0o600) do |file|
+    slide_number = 0
+    slide = slides[slide_number]
+    view_box = ""
+
+    frames.each do |interval_start, interval_end|
+      # Get view_box parameter of the current slide
+      _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
+
+      if slide_number < slides.size && interval_start >= slides[slide_number].begin
+        slide = slides[slide_number]
+        slide_number += 1
+      end
+
+      draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
+      draw = [] if draw.nil?
+
+      if draw.nil?
+        draw = []
+      elsif REMOVE_REDUNDANT_SHAPES && !draw.empty?
+        draw = remove_adjacent(draw)
+      end
+
+      svg_export(draw, view_box, slide.href, slide.width, slide.height, frame_number)
+
+      # Write the frame's duration down
+      file.puts "file ../frames/frame#{frame_number}.#{FILE_EXTENSION}"
+      file.puts "duration #{(interval_end - interval_start).round(1)}"
+
+      frame_number += 1
+    end
+
+    # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
+    file.puts "file ../frames/frame#{frame_number - 1}.#{FILE_EXTENSION}" if frame_number.positive?
+  end
+end
+
 def svg_export(draw, view_box, slide_href, width, height, frame_number)
   # Builds SVG frame
   builder = Builder::XmlMarkup.new
 
-  # FFmpeg unfortunately seems to require the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
-  builder.svg(width: "1600", height: "1080", viewBox: view_box, "xmlns:xlink" => "http://www.w3.org/1999/xlink") do
+  # FFmpeg requires the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
+  builder.svg(width: SLIDES_WIDTH, height: SLIDES_HEIGHT, viewBox: view_box,
+              "xmlns:xlink" => "http://www.w3.org/1999/xlink", 'xmlns' => 'http://www.w3.org/2000/svg') do
     # Display background image
     builder.image('xlink:href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
 
@@ -368,7 +623,7 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
     end
   end
 
-  File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w") do |svg|
+  File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w", 0o600) do |svg|
     if SVGZ_COMPRESSION
       svgz = Zlib::GzipWriter.new(svg)
       svgz.write(builder.target!)
@@ -379,137 +634,51 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
   end
 end
 
-# Opens shapes.svg
-whiteboard = Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!
+def export_presentation
+  # Benchmark
+  start = Time.now
 
-convert_whiteboard_shapes(whiteboard)
+  puts "Started composing presentation"
 
-@timestamps, slides, shapes = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
-shapes_interval_tree = IntervalTree::Tree.new(shapes)
+  # Convert whiteboard assets to a format compatible with FFmpeg
+  convert_whiteboard_shapes(Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!)
 
-# Presentation panzooms
-panzooms = parse_panzooms(Nokogiri::XML::Reader(File.open("#{@published_files}/panzooms.xml")))
+  metadata = Nokogiri::XML(File.open("#{@published_files}/metadata.xml"))
 
-render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml")))
-render_cursor(panzooms, Nokogiri::XML::Reader(File.open("#{@published_files}/cursor.xml")))
+  # Playback duration in seconds
+  duration = metadata.xpath('recording/playback/duration').inner_text.to_f / 1000
+  meeting_name = metadata.xpath('recording/meta/meetingName').inner_text
 
-# Create frame intervals with starting time 0
-intervals = @timestamps.uniq.sort
-intervals = intervals.drop(1) if intervals.first == -1
+  shapes, slides, timestamps = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
+  panzooms, timestamps = parse_panzooms(Nokogiri::XML::Reader(File.open("#{@published_files}/panzooms.xml")),
+                                        timestamps)
 
-frame_number = 0
-frames = []
+  # Ensure correct recording length - shapes.svg may have incorrect slides after recording ends
+  timestamps << duration
+  timestamps = timestamps.select { |t| t <= duration }
 
-intervals.each_cons(2) do |(a, b)|
-  frames << [a, b]
+  # Create video assets
+  render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml")))
+  render_cursor(panzooms, Nokogiri::XML::Reader(File.open("#{@published_files}/cursor.xml")))
+  render_whiteboard(panzooms, slides, shapes, timestamps)
+
+  puts "Finished composing presentation. Total: #{Time.now - start}"
+
+  start = Time.now
+  puts "Beginning to render video"
+
+  render_video(duration, meeting_name)
+  add_chapters(duration, slides)
+  add_captions
+
+  puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{Time.now - start}" if ffmpeg
 end
 
-# Render the visible frame for each interval
-File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w") do |file|
-  # Example slide to instantiate variables
-  width = 1600
-  height = 900
-  view_box = "0 0 1600 900"
-  slide_href = "deskshare/deskshare.png"
-
-  frames.each do |frame|
-    interval_start, interval_end = frame
-
-    # Get view_box parameter of the current slide
-    _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
-
-    if !slides.empty? && interval_start >= slides.first.begin
-      slide = slides.shift
-
-      slide_href = slide.href
-      width = slide.width
-      height = slide.height
-    end
-
-    draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
-    draw = [] if draw.nil?
-
-    if REMOVE_REDUNDANT_SHAPES && !draw.empty?
-      draw_unique = []
-      current_id = draw.first.id
-
-      index = 0
-      draw.each do |shape|
-        if shape.id != current_id
-          current_id = shape.id
-          draw_unique << draw[index - 1]
-        end
-
-        index += 1
-      end
-
-      draw_unique << draw.last
-      draw = draw_unique
-    end
-
-    svg_export(draw, view_box, slide_href, width, height, frame_number)
-
-    # Write the frame's duration down
-    file.puts "file ../frames/frame#{frame_number}.#{FILE_EXTENSION}"
-    file.puts "duration #{(interval_end - interval_start).round(1)}"
-
-    frame_number += 1
-  end
-
-  # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
-  file.puts "file ../frames/frame#{frame_number - 1}.svg" if frame_number.positive?
-end
-
-finish = Time.now
-
-BigBlueButton.logger.info("Finished processing presentation [#{meeting_id}] for video export. Total: #{finish - start} ")
-
-start = Time.now
-
-# Determine if video had screensharing
-deskshare = File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
-
-render = "ffmpeg -f lavfi -i color=c=white:s=1920x1080 " \
-         "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
-         "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg " \
-         "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
-         "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} "
-
-render << if deskshare
-  "-i #{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION} -filter_complex " \
-  "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
-  "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=320:h=840:x=0:y=0[chat];" \
-  "[4]scale=w=320:h=240[webcams];[5]scale=w=1600:h=1080:force_original_aspect_ratio=1[deskshare];" \
-  "[0][deskshare]overlay=x=320:y=90[screenshare];" \
-  "[screenshare][1]overlay=x=320[slides];" \
-  "[slides][cursor]overlay@m[whiteboard];" \
-  "[whiteboard][chat]overlay=y=240[chats];" \
-  "[chats][webcams]overlay' "
-else
-  "-filter_complex '[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
-  "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=320:h=840:x=0:y=0[chat];" \
-  "[4]scale=w=320:h=240[webcams];" \
-  "[0][1]overlay=x=320[slides];" \
-  "[slides][cursor]overlay@m[whiteboard];" \
-  "[whiteboard][chat]overlay=y=240[chats];[chats][webcams]overlay' "
-end
-
-render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y #{@published_files}/meeting.mp4"
-
-BigBlueButton.logger.info("Beginning to render video for [#{meeting_id}]")
-
-ffmpeg = system(render)
-
-finish = Time.now
-BigBlueButton.logger.info("Exported recording available at #{@published_files}/meeting.mp4 . Render time: #{finish - start}")
+export_presentation
 
 # Delete the contents of the scratch directories
-if ffmpeg
-  FileUtils.rm_rf("#{@published_files}/chats")
-  FileUtils.rm_rf("#{@published_files}/cursor")
-  FileUtils.rm_rf("#{@published_files}/frames")
-  FileUtils.rm_rf("#{@published_files}/timestamps")
-  FileUtils.rm("#{@published_files}/shapes_modified.svg")
-end
+FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames",
+                 "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg",
+                 "#{@published_files}/meeting_metadata"])
 
-exit 0
+exit(0)

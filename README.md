@@ -15,6 +15,10 @@ Server-side version of the script that enables users to download BigBlueButton 2
 
 ✅ Annotations <br  />
 
+✅ Captions <br  />
+
+✅ Chapters <br  />
+
 ✅ Chat <br  />
 
 ✅ Cursor <br  />
@@ -39,8 +43,6 @@ Server-side version of the script that enables users to download BigBlueButton 2
 
 ## Server-Side Usage
 
-Begin by installing Loofah on your BigBlueButton server: `gem install loofah`
-
 Place the file `export_presentation.rb` in the `/usr/local/bigbluebutton/core/scripts/post_publish` directory with executable rights.
   
 Do the same for the file `lib/interval_tree.rb`, moving it to `/usr/local/bigbluebutton/core/lib/recordandplayback`.
@@ -49,7 +51,7 @@ After a session is over and the presentation is processed, the script will begin
 
 The meeting's ID is the alphanumeric string following the 2.3 in the recording's URL.
 
-Existing recordings can be rebuilt to run the exporting scripts automatically again:
+Existing recordings can be re-rendered by running the exporting script on an individual basis:
 
     ./export_presentation.rb -m <meeting_id>
 
@@ -63,21 +65,14 @@ To add a download button to Greenlight's UI, change  [these](https://github.com/
 
 ### Requirements
 
-  
+Root access to a BBB 2.3 server.
 
-FFmpeg compiled with `--enable-librsvg` and `--enable-libx264`  <br  />
-
-Ruby with the Nokogiri and Loofah gems installed <br  />
-
-  
-
-### Rendering options
-
-If your server runs BBB 2.2 or earlier, it is advised to set the flag `REMOVE_REDUNDANT_SHAPES` to **true** in `render_whiteboard.rb`. This will ensure the live whiteboard feature is still supported, require less storage space and increase rendering speeds.
+###  Rendering options 
+If your server supports animated strokes on the whiteboard, set the flag `REMOVE_REDUNDANT_SHAPES` to **true** in `export_presentation.rb`.
 
 Less data can be written on the disk by turning `SVGZ_COMPRESSION` on.
 
-To make rendering faster and less resource-intensive, download FFMpeg's source code and replace the file `ffmpeg/libavcodec/librsvgdec.c` with the one in this directory. After FFmpeg is compiled and installed, enable `FFMPEG_REFERENCE_SUPPORT` in `render_whiteboard.rb`.
+To make rendering faster and less resource-intensive, download FFMpeg's source code and replace the file `ffmpeg/libavcodec/librsvgdec.c` with the one in this directory. After compiling and installing FFMpeg, enable `FFMPEG_REFERENCE_SUPPORT` in `export_presentation.rb` .
 
 The video output quality can be controlled with the `CONSTANT_RATE_FACTOR`.
 

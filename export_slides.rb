@@ -1,19 +1,37 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: false
 
+require "trollop"
+require File.expand_path('../../../lib/recordandplayback', __FILE__)
+
+require "nokogiri"
 require "base64"
 require "builder"
-require "csv"
 require "combine_pdf"
+require "csv"
 require "fileutils"
 require "loofah"
-require "nokogiri"
-require "zlib"
+require "/usr/local/bigbluebutton/core/lib/recordandplayback/interval_tree"
 
-require_relative "lib/interval_tree"
 include IntervalTree
 
-@published_files = File.expand_path(".")
+opts = Trollop.options do
+  opt :meeting_id, "Meeting id to archive", type: String
+  opt :format, "Playback format name", type: String
+end
+
+meeting_id = opts[:meeting_id]
+
+logger = Logger.new("/var/log/bigbluebutton/post_publish.log", 'weekly')
+logger.level = Logger::INFO
+BigBlueButton.logger = logger
+
+BigBlueButton.logger.info("Started exporting PDF for [#{meeting_id}]")
+
+# Track how long the code is taking
+start = Time.now
+
+@published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
 
 # Creates scratch directories
 Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/frames")
@@ -188,19 +206,19 @@ def render_whiteboard(slides, shapes)
 
     svg_export(draw, slide.href, slide.width, slide.height, frame_number)
 
-    pdf = system("rsvg-convert -f pdf -o frames/frame#{frame_number}.pdf frames/frame#{frame_number}.#{FILE_EXTENSION}")
+    pdf = system("rsvg-convert -f pdf -o #{@published_files}/frames/frame#{frame_number}.pdf #{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}")
 
     unless pdf
       warn("An error occurred generating the PDF for slide #{frame_number}")
       exit(false)
     end
 
-    merged << CombinePDF.load("frames/frame#{frame_number}.pdf")
+    merged << CombinePDF.load("#{@published_files}/frames/frame#{frame_number}.pdf")
 
     frame_number += 1
   end
 
-  merged.save "annotated_slides.pdf"
+  merged.save "#{@published_files}/annotated_slides.pdf"
 end
 
 def svg_export(draw, slide_href, width, height, frame_number)
@@ -248,8 +266,6 @@ def export_pdf
   # Benchmark
   start = Time.now
 
-  puts "Started exporting PDF"
-
   convert_whiteboard_shapes(Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!)
 
   shapes, slides = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
@@ -257,7 +273,7 @@ def export_pdf
 
   render_whiteboard(slides, shapes)
 
-  puts "Finished exporting PDF. Total: #{Time.now - start}"
+  BigBlueButton.logger.info("Finished exporting PDF. Total: #{Time.now - start}")
 
   start = Time.now
 end

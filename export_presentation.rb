@@ -37,7 +37,7 @@ VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : 
 # Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
 REMOVE_REDUNDANT_SHAPES = false
 
-BENCHMARK = true ? "-benchmark " : ""
+BENCHMARK = true ? "-benchmark" : ""
 
 # Output video size
 OUTPUT_WIDTH = 1920
@@ -83,19 +83,19 @@ def add_captions
   language_names = ""
 
   (0..json.length - 1).each do |i|
-     caption_input << "-i caption_#{json[i]['locale']}.vtt "
+     caption_input << "-i #{@published_files}/caption_#{json[i]['locale']}.vtt "
      maps << "-map #{i + 1} "
      language_names << "-metadata:s:s:#{i} language=#{json[i]['localeName'].downcase[0..2]} "
   end
 
-  render = "ffmpeg -i meeting.mp4 #{caption_input} " \
+  render = "ffmpeg -i #{@published_files}/meeting.mp4 #{caption_input} " \
             "-map 0:v -map 0:a #{maps} -c:v copy -c:a copy -c:s mov_text #{language_names} " \
-            "-y meeting_captioned.mp4"
+            "-y #{@published_files}/meeting_captioned.mp4"
 
   ffmpeg = system(render)
 
   if ffmpeg
-    FileUtils.mv("meeting_captioned.mp4", "meeting.mp4")
+    FileUtils.mv("#{@published_files}/meeting_captioned.mp4", "#{@published_files}/meeting.mp4")
   else
       warn("An error occurred adding the captions to the video.")
       exit(false)
@@ -104,7 +104,7 @@ end
 
 def add_chapters(duration, slides)
   # Extract metadata
-  ffmpeg = system("ffmpeg -i meeting.mp4 -f ffmetadata meeting_metadata")
+  ffmpeg = system("ffmpeg -i #{@published_files}/meeting.mp4 -y -f ffmetadata #{@published_files}/meeting_metadata")
 
   unless ffmpeg
     warn("An error occurred extracting the video's metadata.")
@@ -138,9 +138,9 @@ def add_chapters(duration, slides)
     file << chapter
   end
 
-  ffmpeg = system("ffmpeg -i meeting.mp4 -i meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y -t #{duration} meeting_chapters.mp4")
+  ffmpeg = system("ffmpeg -i #{@published_files}/meeting.mp4 -i #{@published_files}/meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y -t #{duration} #{@published_files}/meeting_chapters.mp4")
   if ffmpeg
-    FileUtils.mv("meeting_chapters.mp4", "meeting.mp4")
+    FileUtils.mv("#{@published_files}/meeting_chapters.mp4", "#{@published_files}/meeting.mp4")
   else
     warn("Failed to add the chapters to the video.")
     exit(false)

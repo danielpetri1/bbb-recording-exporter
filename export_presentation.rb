@@ -565,10 +565,9 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
       end
 
       draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
+      draw = [] if draw.nil?
 
-      if draw.nil?
-        draw = []
-      elsif REMOVE_REDUNDANT_SHAPES && !draw.empty?
+      if REMOVE_REDUNDANT_SHAPES && !draw.empty?
         draw = remove_adjacent(draw)
       end
 

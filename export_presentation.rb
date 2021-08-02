@@ -37,7 +37,10 @@ VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : 
 # Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
 REMOVE_REDUNDANT_SHAPES = false
 
-BENCHMARK = true ? "-benchmark" : ""
+BENCHMARK_FFMPEG = false
+BENCHMARK = BENCHMARK_FFMPEG ? "-benchmark " : ""
+
+THREADS = 4
 
 # Output video size
 OUTPUT_WIDTH = 1920
@@ -526,7 +529,7 @@ def render_video(duration, meeting_name)
     "[whiteboard][chat]overlay=y=#{WEBCAMS_HEIGHT}[chats];[chats][webcams]overlay' "
   end
 
-  render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} "
+  render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} -threads #{THREADS} "
   render << "-metadata title='#{meeting_name}' #{BENCHMARK} #{@published_files}/meeting.mp4"
 
   ffmpeg = system(render)
@@ -545,11 +548,6 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
   intervals = intervals.drop(1) if intervals.first == -1
 
   frame_number = 0
-  frames = []
-
-  intervals.each_cons(2) do |(a, b)|
-    frames << [a, b]
-  end
 
   # Render the visible frame for each interval
   File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w", 0o600) do |file|
@@ -557,7 +555,7 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
     slide = slides[slide_number]
     view_box = ""
 
-    frames.each do |interval_start, interval_end|
+    intervals.each_cons(2).each do |interval_start, interval_end|
       # Get view_box parameter of the current slide
       _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
 
@@ -567,7 +565,6 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
       end
 
       draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
-      draw = [] if draw.nil?
 
       if draw.nil?
         draw = []

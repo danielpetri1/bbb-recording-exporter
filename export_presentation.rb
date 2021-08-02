@@ -567,9 +567,7 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
       draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)
       draw = [] if draw.nil?
 
-      if REMOVE_REDUNDANT_SHAPES && !draw.empty?
-        draw = remove_adjacent(draw)
-      end
+      draw = remove_adjacent(draw) if REMOVE_REDUNDANT_SHAPES && !draw.empty?
 
       svg_export(draw, view_box, slide.href, slide.width, slide.height, frame_number)
 

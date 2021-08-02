@@ -196,10 +196,9 @@ def render_whiteboard(slides, shapes)
 
   slides.each do |slide|
     draw = shapes_interval_tree.search(slide.end - 0.05, unique: false, sort: false)
+    draw = [] if draw.nil?
 
-    if draw.nil?
-      draw = []
-    elsif REMOVE_REDUNDANT_SHAPES && !draw.empty?
+    if REMOVE_REDUNDANT_SHAPES && !draw.empty?
       draw = remove_adjacent(draw)
     end
 

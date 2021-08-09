@@ -660,7 +660,7 @@ def export_presentation
   BigBlueButton.logger.info("Starting to export video")
 
   render_video(duration, meeting_name)
-  # add_chapters(duration, slides)
+  add_chapters(duration, slides)
   # add_captions
 
   BigBlueButton.logger.info("Exported recording available at #{@published_files}/meeting.mp4. Rendering took: #{Time.now - start}")

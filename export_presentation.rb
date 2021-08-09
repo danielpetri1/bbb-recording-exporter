@@ -155,7 +155,7 @@ def add_chapters(duration, slides)
     chapter << "[CHAPTER]\nSTART=#{chapter_start * 1e9}\nEND=#{chapter_end * 1e9}\ntitle=#{title}\n\n"
   end
 
-  File.open("meeting_metadata", "a") do |file|
+  File.open("#{@published_files}/meeting_metadata", "a") do |file|
     file << chapter
   end
 

@@ -28,9 +28,6 @@ BigBlueButton.logger = logger
 
 BigBlueButton.logger.info("Started exporting presentation for [#{meeting_id}]")
 
-# Track how long the code is taking
-start = Time.now
-
 @published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
 
 # Creates scratch directories
@@ -306,7 +303,7 @@ def parse_whiteboard_shapes(shape_reader)
 
     shape_undo = slide_out if shape_undo.negative?
 
-    shape_enter = [[shape_timestamp, slide_in].max, slide_out].min
+    shape_enter = [shape_timestamp, slide_in].max
     shape_leave = [[shape_undo, slide_in].max, slide_out].min
 
     timestamps << shape_enter

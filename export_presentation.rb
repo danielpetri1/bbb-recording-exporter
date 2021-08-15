@@ -28,9 +28,6 @@ BigBlueButton.logger = logger
 
 BigBlueButton.logger.info("Started exporting presentation for [#{meeting_id}]")
 
-# Track how long the code is taking
-start = Time.now
-
 @published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
 
 # Creates scratch directories

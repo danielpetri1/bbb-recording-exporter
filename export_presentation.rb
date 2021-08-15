@@ -647,7 +647,7 @@ def export_presentation
   add_chapters(duration, slides)
   add_captions
 
-  puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{Time.now - start}" if ffmpeg
+  puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{Time.now - start}"
 end
 
 export_presentation

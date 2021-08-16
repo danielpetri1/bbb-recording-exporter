@@ -11,6 +11,7 @@ def download(file)
 
   path = "https://hostname/presentation/meetingID/#{file}"
   
+
   puts "Downloading #{path}"
 
   File.open(file, 'wb') do |get|
@@ -23,7 +24,7 @@ end
 # Video: 'video/webcams.mp4', 'deskshare/deskshare.mp4'
 # Chat: 'slides_new.xml'
 
-['shapes.svg', 'cursor.xml', 'panzooms.xml', 'presentation_text.json', 'captions.json', 'metadata.xml', 'video/webcams.webm', 'slides_new.xml'].each do |get|
+['shapes.svg', 'cursor.xml', 'panzooms.xml', 'presentation_text.json', 'captions.json', 'metadata.xml', 'video/webcams.webm', 'deskshare/deskshare.webm', 'slides_new.xml'].each do |get|
   download(get)
 end
 

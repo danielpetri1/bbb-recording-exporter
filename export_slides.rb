@@ -11,7 +11,7 @@ require "combine_pdf"
 require "csv"
 require "fileutils"
 require "loofah"
-require "/usr/local/bigbluebutton/core/lib/recordandplayback/interval_tree"
+require File.expand_path('../../../lib/recordandplayback/interval_tree', __FILE__)
 
 include IntervalTree
 
@@ -27,9 +27,6 @@ logger.level = Logger::INFO
 BigBlueButton.logger = logger
 
 BigBlueButton.logger.info("Started exporting PDF for [#{meeting_id}]")
-
-# Track how long the code is taking
-start = Time.now
 
 @published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
 
@@ -71,7 +68,6 @@ def convert_whiteboard_shapes(whiteboard)
       path = "#{@published_files}/#{poll.attribute('href')}"
       poll.remove_attribute("href")
 
-      # Namespace xmlns:xlink is required by FFmpeg
       poll.add_namespace_definition("xlink", "http://www.w3.org/1999/xlink")
 
       data = base64_encode(path)
@@ -85,7 +81,6 @@ def convert_whiteboard_shapes(whiteboard)
     # Turn style attributes into a hash
     style_values = Hash[*CSV.parse(style, col_sep: ":", row_sep: ";").flatten]
 
-    # The text_color variable may not be required depending on your FFmpeg version
     text_color = style_values["color"]
     font_size = style_values["font-size"].to_f
 
@@ -103,7 +98,7 @@ def convert_whiteboard_shapes(whiteboard)
     builder = Builder::XmlMarkup.new
     builder.text(x: x, y: y, fill: text_color, "xml:space" => "preserve") do
       text.each do |line|
-        line = line.to_s
+        line = Loofah.fragment(line.to_s).scrub!(:strip).text.unicode_normalize
 
         if line == "<br/>"
           builder.tspan(x: x, dy: "0.9em") { builder << "<br/>" }
@@ -112,7 +107,7 @@ def convert_whiteboard_shapes(whiteboard)
           line_breaks = line.chars.each_slice((text_box_width / (font_size * 0.52)).to_i).map(&:join)
 
           line_breaks.each do |row|
-            safe_message = Loofah.fragment(row).scrub!(:escape).text.unicode_normalize
+            safe_message = Loofah.fragment(row).scrub!(:escape)
             builder.tspan(x: x, dy: "0.9em") { builder << safe_message }
           end
         end
@@ -198,9 +193,7 @@ def render_whiteboard(slides, shapes)
     draw = shapes_interval_tree.search(slide.end - 0.05, unique: false, sort: false)
     draw = [] if draw.nil?
 
-    if REMOVE_REDUNDANT_SHAPES && !draw.empty?
-      draw = remove_adjacent(draw)
-    end
+    draw = remove_adjacent(draw) if REMOVE_REDUNDANT_SHAPES && !draw.empty?
 
     svg_export(draw, slide.href, slide.width, slide.height, frame_number)
 
@@ -272,8 +265,6 @@ def export_pdf
   render_whiteboard(slides, shapes)
 
   BigBlueButton.logger.info("Finished exporting PDF. Total: #{Time.now - start}")
-
-  start = Time.now
 end
 
 export_pdf

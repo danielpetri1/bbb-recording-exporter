@@ -160,7 +160,7 @@ def parse_whiteboard_shapes(shape_reader)
 
     shape_undo = slide_out if shape_undo.negative?
 
-    shape_enter = [[shape_timestamp, slide_in].max, slide_out].min
+    shape_enter = [shape_timestamp, slide_in].max
     shape_leave = [[shape_undo, slide_in].max, slide_out].min
 
     xml = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>"

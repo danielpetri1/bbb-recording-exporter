@@ -53,7 +53,6 @@ def convert_whiteboard_shapes(whiteboard)
       path = "#{@published_files}/#{poll.attribute('href')}"
       poll.remove_attribute("href")
 
-      # Namespace xmlns:xlink is required by FFmpeg
       poll.add_namespace_definition("xlink", "http://www.w3.org/1999/xlink")
 
       data = base64_encode(path)
@@ -67,7 +66,6 @@ def convert_whiteboard_shapes(whiteboard)
     # Turn style attributes into a hash
     style_values = Hash[*CSV.parse(style, col_sep: ":", row_sep: ";").flatten]
 
-    # The text_color variable may not be required depending on your FFmpeg version
     text_color = style_values["color"]
     font_size = style_values["font-size"].to_f
 
@@ -147,7 +145,7 @@ def parse_whiteboard_shapes(shape_reader)
 
     shape_undo = slide_out if shape_undo.negative?
 
-    shape_enter = [[shape_timestamp, slide_in].max, slide_out].min
+    shape_enter = [shape_timestamp, slide_in].max
     shape_leave = [[shape_undo, slide_in].max, slide_out].min
 
     xml = "<g style=\"#{node.attribute('style')}\">#{node.inner_xml}</g>"
@@ -180,9 +178,7 @@ def render_whiteboard(slides, shapes)
     draw = shapes_interval_tree.search(slide.end - 0.05, unique: false, sort: false)
     draw = [] if draw.nil?
 
-    if REMOVE_REDUNDANT_SHAPES && !draw.empty?
-      draw = remove_adjacent(draw)
-    end
+    draw = remove_adjacent(draw) if REMOVE_REDUNDANT_SHAPES && !draw.empty?
 
     svg_export(draw, slide.href, slide.width, slide.height, frame_number)
 
@@ -256,8 +252,6 @@ def export_pdf
   render_whiteboard(slides, shapes)
 
   puts "Finished exporting PDF. Total: #{Time.now - start}"
-
-  start = Time.now
 end
 
 export_pdf

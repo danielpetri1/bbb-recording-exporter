@@ -35,8 +35,8 @@ slides = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg', 'x
 # Download all captions
 json = JSON.parse(File.read('captions.json'))
 
-for i in 0..json.length - 1 do
-  download "caption_#{json[i]["locale"]}.vtt"
+(0..json.length - 1).each do |i|
+  download "caption_#{json[i]['locale']}.vtt"
 end
 
 # Downloads each slide

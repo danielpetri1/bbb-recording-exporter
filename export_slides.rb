@@ -85,7 +85,7 @@ def convert_whiteboard_shapes(whiteboard)
     builder = Builder::XmlMarkup.new
     builder.text(x: x, y: y, fill: text_color, "xml:space" => "preserve") do
       text.each do |line|
-        line = line.to_s
+        line = Loofah.fragment(line.to_s).scrub!(:strip).text.unicode_normalize
 
         if line == "<br/>"
           builder.tspan(x: x, dy: "0.9em") { builder << "<br/>" }
@@ -94,7 +94,7 @@ def convert_whiteboard_shapes(whiteboard)
           line_breaks = line.chars.each_slice((text_box_width / (font_size * 0.52)).to_i).map(&:join)
 
           line_breaks.each do |row|
-            safe_message = Loofah.fragment(row).scrub!(:escape).text.unicode_normalize
+            safe_message = Loofah.fragment(row).scrub!(:escape)
             builder.tspan(x: x, dy: "0.9em") { builder << safe_message }
           end
         end

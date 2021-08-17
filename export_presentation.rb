@@ -205,7 +205,7 @@ def convert_whiteboard_shapes(whiteboard)
     builder = Builder::XmlMarkup.new
     builder.text(x: x, y: y, fill: text_color, "xml:space" => "preserve") do
       text.each do |line|
-        line = Loofah.fragment(line).scrub!(:strip).text.unicode_normalize
+        line = Loofah.fragment(line.to_s).scrub!(:strip).text.unicode_normalize
 
         if line == "<br/>"
           builder.tspan(x: x, dy: "0.9em") { builder << "<br/>" }

@@ -61,7 +61,7 @@ To re-render all existing recordings, run
 
 If you do not have access to a BBB server, check out the branch 'client-side'.
 
-To add a download button to Greenlight's UI, change  [these](https://github.com/danielpetri1/greenlight/commit/72c2165e4a504aa40e116a83864de36dea540b65)  files.
+To add a download button to Greenlight's UI, change  [these](https://github.com/danielpetri1/greenlight/commit/d92f8502e3dacc87fb6ae6b05c91a2353010d884)  files.
 
 ### Requirements
 

@@ -61,6 +61,8 @@ To re-render all existing recordings, run
 
 If you do not have access to a BBB server, check out the branch 'client-side'.
 
+For caption support, recompile FFmpeg with the `movtext` encoder enabled and uncomment the `add_captions` method.
+
 To add a download button to Greenlight's UI, change  [these](https://github.com/danielpetri1/greenlight/commit/d92f8502e3dacc87fb6ae6b05c91a2353010d884)  files.
 
 ### Requirements
@@ -72,9 +74,9 @@ If your server supports animated strokes on the whiteboard, set the flag `REMOVE
 
 Less data can be written on the disk by turning `SVGZ_COMPRESSION` on.
 
-To make rendering faster and less resource-intensive, download FFMpeg's source code and replace the file `ffmpeg/libavcodec/librsvgdec.c` with the one in this directory. After compiling and installing FFMpeg, enable `FFMPEG_REFERENCE_SUPPORT` in `export_presentation.rb` .
+To make rendering faster and less resource-intensive, download FFMpeg's source code and replace the file `ffmpeg/libavcodec/librsvgdec.c` with the one in this directory. After compiling and installing FFMpeg, enable `FFMPEG_REFERENCE_SUPPORT` in `export_presentation.rb` . [Steps by @felcaetano](https://github.com/danielpetri1/bbb-recording-exporter/issues/44#issuecomment-904464887).
 
-The video output quality can be controlled with the `CONSTANT_RATE_FACTOR`.
+The video output quality can be controlled with `CONSTANT_RATE_FACTOR`.
 
 ### Get in touch
 

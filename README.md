@@ -81,7 +81,7 @@ The video output quality can be controlled with `CONSTANT_RATE_FACTOR`.
 ### Troubleshooting
 
 Exports don't start after the meeting ends: `/var/log/bigbluebutton/post_publish.log` must be chowned to `bigbluebutton:bigbluebutton`
-Captions 
+ 
 
 ### Get in touch
 

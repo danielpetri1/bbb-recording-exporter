@@ -31,7 +31,8 @@ BigBlueButton.logger.info("Started exporting presentation for [#{meeting_id}]")
 @published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
 
 # Creates scratch directories
-FileUtils.mkdir_p(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames", "#{@published_files}/timestamps"])
+FileUtils.mkdir_p(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames",
+                   "#{@published_files}/timestamps"])
 
 # Setting the SVGZ option to true will write less data on the disk.
 SVGZ_COMPRESSION = false
@@ -655,7 +656,7 @@ def export_presentation
 
   render_video(duration, meeting_name)
   add_chapters(duration, slides)
-  #add_captions
+  # add_captions
 
   FileUtils.mv("#{@published_files}/meeting-tmp.mp4", "#{@published_files}/meeting.mp4")
   BigBlueButton.logger.info("Exported recording available at #{@published_files}/meeting.mp4. Rendering took: #{Time.now - start}")

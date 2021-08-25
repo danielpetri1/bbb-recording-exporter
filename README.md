@@ -78,6 +78,11 @@ To make rendering faster and less resource-intensive, download FFMpeg's source c
 
 The video output quality can be controlled with `CONSTANT_RATE_FACTOR`.
 
+### Troubleshooting
+
+Exports don't start after the meeting ends: `/var/log/bigbluebutton/post_publish.log` must be chowned to `bigbluebutton:bigbluebutton`
+Captions 
+
 ### Get in touch
 
 If this code helped you or you encountered any problems, please do get in touch! Since this script is being actively developed for my bachelor's Thesis at the Technical University of Munich, feedback is more than welcomed. It will be provided here as documentation.

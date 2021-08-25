@@ -16,10 +16,7 @@ include IntervalTree
 @published_files = File.expand_path(".")
 
 # Creates scratch directories
-Dir.mkdir("#{@published_files}/chats") unless File.exist?("#{@published_files}/chats")
-Dir.mkdir("#{@published_files}/cursor") unless File.exist?("#{@published_files}/cursor")
-Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/frames")
-Dir.mkdir("#{@published_files}/timestamps") unless File.exist?("#{@published_files}/timestamps")
+FileUtils.mkdir_p(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames", "#{@published_files}/timestamps"])
 
 # Setting the SVGZ option to true will write less data on the disk.
 SVGZ_COMPRESSION = false
@@ -91,14 +88,14 @@ def add_captions
      language_names << "-metadata:s:s:#{i} language=#{json[i]['localeName'].downcase[0..2]} "
   end
 
-  render = "ffmpeg -i #{@published_files}/meeting.mp4 #{caption_input} " \
+  render = "ffmpeg -i #{@published_files}/meeting-tmp.mp4 #{caption_input} " \
             "-map 0:v -map 0:a #{maps} -c:v copy -c:a copy -c:s mov_text #{language_names} " \
             "-y #{@published_files}/meeting_captioned.mp4"
 
   ffmpeg = system(render)
 
   if ffmpeg
-    FileUtils.mv("#{@published_files}/meeting_captioned.mp4", "#{@published_files}/meeting.mp4")
+    FileUtils.mv("#{@published_files}/meeting_captioned.mp4", "#{@published_files}/meeting-tmp.mp4")
   else
       warn("An error occurred adding the captions to the video.")
       exit(false)
@@ -107,7 +104,7 @@ end
 
 def add_chapters(duration, slides)
   # Extract metadata
-  ffmpeg = system("ffmpeg -i #{@published_files}/meeting.mp4 -y -f ffmetadata #{@published_files}/meeting_metadata")
+  ffmpeg = system("ffmpeg -i #{@published_files}/meeting-tmp.mp4 -y -f ffmetadata #{@published_files}/meeting_metadata")
 
   unless ffmpeg
     warn("An error occurred extracting the video's metadata.")
@@ -141,9 +138,9 @@ def add_chapters(duration, slides)
     file << chapter
   end
 
-  ffmpeg = system("ffmpeg -i #{@published_files}/meeting.mp4 -i #{@published_files}/meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y -t #{duration} #{@published_files}/meeting_chapters.mp4")
+  ffmpeg = system("ffmpeg -i #{@published_files}/meeting-tmp.mp4 -i #{@published_files}/meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y -t #{duration} #{@published_files}/meeting_chapters.mp4")
   if ffmpeg
-    FileUtils.mv("#{@published_files}/meeting_chapters.mp4", "#{@published_files}/meeting.mp4")
+    FileUtils.mv("#{@published_files}/meeting_chapters.mp4", "#{@published_files}/meeting-tmp.mp4")
   else
     warn("Failed to add the chapters to the video.")
     exit(false)
@@ -176,7 +173,7 @@ def convert_whiteboard_shapes(whiteboard)
       # Namespace xmlns:xlink is required by FFmpeg
       poll.add_namespace_definition("xlink", "http://www.w3.org/1999/xlink")
 
-      data = FFMPEG_REFERENCE_SUPPORT ? "file:///#{path}" : base64_encode(path)
+      data = FFMPEG_REFERENCE_SUPPORT ? "file://#{path}" : base64_encode(path)
 
       poll.set_attribute("xlink:href", data)
     end
@@ -276,7 +273,7 @@ def parse_whiteboard_shapes(shape_reader)
       # Image paths need to follow the URI Data Scheme (for slides and polls)
       path = "#{@published_files}/#{node.attribute('href')}"
 
-      data = FFMPEG_REFERENCE_SUPPORT ? "file:///#{path}" : base64_encode(path)
+      data = FFMPEG_REFERENCE_SUPPORT ? "file://#{path}" : base64_encode(path)
 
       slides << WhiteboardSlide.new(data, slide_in, slide_out, node.attribute("width").to_f, node.attribute("height"))
     end
@@ -530,7 +527,7 @@ def render_video(duration, meeting_name)
   end
 
   render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} -threads #{THREADS} "
-  render << "-metadata title='#{meeting_name}' #{BENCHMARK} #{@published_files}/meeting.mp4"
+  render << "-metadata title='#{meeting_name}' #{BENCHMARK} #{@published_files}/meeting-tmp.mp4"
 
   ffmpeg = system(render)
 
@@ -601,7 +598,7 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
 
   File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w", 0o600) do |svg|
     if SVGZ_COMPRESSION
-      svgz = Zlib::GzipWriter.new(svg)
+      svgz = Zlib::GzipWriter.new(svg, Zlib::BEST_SPEED)
       svgz.write(builder.target!)
       svgz.close
     else
@@ -647,6 +644,7 @@ def export_presentation
   add_chapters(duration, slides)
   add_captions
 
+  FileUtils.mv("#{@published_files}/meeting-tmp.mp4", "#{@published_files}/meeting.mp4")
   puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{Time.now - start}"
 end
 

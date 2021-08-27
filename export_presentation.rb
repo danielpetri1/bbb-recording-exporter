@@ -360,6 +360,7 @@ def render_chat(chat_reader)
     messages.each do |timestamp, name, chat|
       # Strip HTML tags e.g. from links so it only displays the inner text
       chat = Loofah.fragment(chat).scrub!(:strip).text.unicode_normalize
+      name = Loofah.fragment(name).scrub!(:strip).text.unicode_normalize
 
       max_message_length = (CHAT_WIDTH / CHAT_FONT_SIZE_X) - 1
 

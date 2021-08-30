@@ -229,7 +229,7 @@ def svg_export(draw, slide_href, width, height, frame_number)
 
   File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w", 0o600) do |svg|
     if SVGZ_COMPRESSION
-      svgz = Zlib::GzipWriter.new(svg)
+      svgz = Zlib::GzipWriter.new(svg, Zlib::BEST_SPEED)
       svgz.write(builder.target!)
       svgz.close
     else
@@ -250,7 +250,7 @@ def unique_slides(slides)
     end
   end
 
-  slides.compact
+  slides.compact! || compact
 end
 
 def export_pdf

@@ -32,7 +32,7 @@ BigBlueButton.logger.info("Started exporting presentation for [#{meeting_id}]")
 
 # Creates scratch directories
 FileUtils.mkdir_p(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames",
-                   "#{@published_files}/timestamps"])
+                   "#{@published_files}/timestamps", "/var/bigbluebutton/published/video/#{meeting_id}"])
 
 # Setting the SVGZ option to true will write less data on the disk.
 SVGZ_COMPRESSION = false
@@ -349,6 +349,7 @@ def render_chat(chat_reader)
   chat_y = 0
 
   overlay_position = []
+  duplicates = []
 
   # Create SVG chat with all messages
   # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
@@ -392,7 +393,25 @@ def render_chat(chat_reader)
       # Message height equals the line break amount + the line for the name / time + the empty line afterwards
       message_height = (line_wraps.size + 2) * CHAT_FONT_SIZE
 
+      # Add message to a new column if it goes over the canvas height
       if svg_y + message_height > CHAT_CANVAS_HEIGHT
+
+        # Insert duplicate messages when going to next column for a seamless transition
+        duplicate_y = CHAT_HEIGHT
+        duplicates.each do |header, content, duplicate_x|
+          break if duplicate_y.negative?
+
+          content.each do |inner|
+            duplicate_y -= CHAT_FONT_SIZE
+            builder.text(x: duplicate_x + CHAT_WIDTH, y: duplicate_y) { builder << inner }
+          end
+
+          duplicate_y -= CHAT_FONT_SIZE
+          builder.text(x: duplicate_x + CHAT_WIDTH, y: duplicate_y, "font-weight" => "bold") { builder << header }
+          duplicate_y -= CHAT_FONT_SIZE
+        end
+
+        # Set coordinates to new column
         svg_y = CHAT_HEIGHT + CHAT_FONT_SIZE
         svg_x += CHAT_WIDTH
 
@@ -405,10 +424,14 @@ def render_chat(chat_reader)
       overlay_position << [timestamp, chat_x, chat_y]
 
       # Username and chat timestamp
+      header = "#{name}    #{Time.at(timestamp.to_f.round(0)).utc.strftime('%H:%M:%S')}"
+
       builder.text(x: svg_x, y: svg_y, "font-weight" => "bold") {
-        builder << "#{name}    #{Time.at(timestamp.to_f.round(0)).utc.strftime('%H:%M:%S')}"
+        builder << header
       }
+
       svg_y += CHAT_FONT_SIZE
+      content = []
 
       # Message text
       line_wraps.each do |a, b|
@@ -416,8 +439,11 @@ def render_chat(chat_reader)
 
         builder.text(x: svg_x, y: svg_y) { builder << safe_message }
         svg_y += CHAT_FONT_SIZE
+
+        content.unshift(safe_message)
       end
 
+      duplicates.unshift([header, content, svg_x])
       svg_y += CHAT_FONT_SIZE
     end
   end

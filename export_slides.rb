@@ -250,7 +250,7 @@ def unique_slides(slides)
     end
   end
 
-  slides.compact! || compact
+  slides.compact! || slides
 end
 
 def export_pdf

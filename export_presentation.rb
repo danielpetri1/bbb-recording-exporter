@@ -35,11 +35,14 @@ FileUtils.mkdir_p(["#{@published_files}/chats", "#{@published_files}/cursor", "#
                    "#{@published_files}/timestamps", "/var/bigbluebutton/published/video/#{meeting_id}"])
 
 # Setting the SVGZ option to true will write less data on the disk.
-SVGZ_COMPRESSION = false
+SVGZ_COMPRESSION = true
 
-# Set this to true if you've recompiled FFmpeg to enable external references. Writes less data on disk and is faster.
+# Set this to true if you've recompiled FFmpeg to enable external references. Writes less data on disk
 FFMPEG_REFERENCE_SUPPORT = false
 BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
+
+# Set this to true if you've recompiled FFmpeg with the movtext codec enabled
+CAPTION_SUPPORT = false
 
 # Video output quality: 0 is lossless, 51 is the worst. Default 23, 18 - 28 recommended
 CONSTANT_RATE_FACTOR = 23
@@ -160,6 +163,18 @@ def add_chapters(duration, slides)
   else
     warn("Failed to add the chapters to the video.")
     exit(false)
+  end
+end
+
+def add_greenlight_buttons(metadata)
+  meeting_id = metadata.xpath('recording/id').inner_text
+  hostname = metadata.xpath('recording/meta/bbb-origin-server-name').inner_text
+
+  metadata.xpath('recording/playback/format').children.first.content = "Video"
+  metadata.xpath('recording/playback/link').children.first.content = "https://#{hostname}/presentation/#{meeting_id}/meeting.mp4"
+  
+  File.open("/var/bigbluebutton/published/video/#{meeting_id}/metadata.xml", "w") do |file|
+    file.write(metadata)
   end
 end
 
@@ -686,10 +701,12 @@ def export_presentation
 
   render_video(duration, meeting_name)
   add_chapters(duration, slides)
-  # add_captions
+  add_captions if CAPTION_SUPPORT
 
   FileUtils.mv("#{@published_files}/meeting-tmp.mp4", "#{@published_files}/meeting.mp4")
   BigBlueButton.logger.info("Exported recording available at #{@published_files}/meeting.mp4. Rendering took: #{Time.now - start}")
+
+  add_greenlight_buttons(metadata)
 end
 
 export_presentation

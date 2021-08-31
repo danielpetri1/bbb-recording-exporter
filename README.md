@@ -23,6 +23,8 @@ Server-side version of the script that enables users to download BigBlueButton 2
 
 ✅ Cursor <br  />
 
+✅ Integration with Greenlight <br  />
+
 ✅ Polls <br  />
 
 ✅ Screen shares <br  />

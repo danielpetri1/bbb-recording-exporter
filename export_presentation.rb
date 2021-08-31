@@ -339,7 +339,7 @@ def remove_adjacent(array)
     index += 1
   end
 
-  array.compact
+  array.compact! || array
 end
 
 def render_chat(chat_reader)

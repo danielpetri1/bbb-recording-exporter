@@ -334,7 +334,10 @@ def render_chat(chat_reader)
   chat_y = 0
 
   overlay_position = []
-  duplicates = []
+
+  # Keep last n messages for seamless transitions between columns
+  duplicates = Array.new((CHAT_HEIGHT / (3 * CHAT_FONT_SIZE)) + 1) { nil }
+
   # Create SVG chat with all messages
   # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
   builder = Builder::XmlMarkup.new
@@ -382,12 +385,12 @@ def render_chat(chat_reader)
 
         # Insert duplicate messages when going to next column for a seamless transition
         duplicate_y = CHAT_HEIGHT
-        duplicates.each do |header, content, duplicate_x|
-          break if duplicate_y.negative?
+        duplicates.each do |header, duplicate_content, duplicate_x|
+          break if header.nil? || duplicate_y.negative?
 
-          content.each do |inner|
+          duplicate_content.each do |content|
             duplicate_y -= CHAT_FONT_SIZE
-            builder.text(x: duplicate_x + CHAT_WIDTH, y: duplicate_y) { builder << inner }
+            builder.text(x: duplicate_x + CHAT_WIDTH, y: duplicate_y) { builder << content }
           end
 
           duplicate_y -= CHAT_FONT_SIZE
@@ -415,7 +418,7 @@ def render_chat(chat_reader)
       }
 
       svg_y += CHAT_FONT_SIZE
-      content = []
+      duplicate_content = []
 
       # Message text
       line_wraps.each do |a, b|
@@ -424,10 +427,12 @@ def render_chat(chat_reader)
         builder.text(x: svg_x, y: svg_y) { builder << safe_message }
         svg_y += CHAT_FONT_SIZE
 
-        content.unshift(safe_message)
+        duplicate_content.unshift(safe_message)
       end
+      
+      duplicates.unshift([header, duplicate_content, svg_x])
+      duplicates.pop
 
-      duplicates.unshift([header, content, svg_x])
       svg_y += CHAT_FONT_SIZE
     end
   end

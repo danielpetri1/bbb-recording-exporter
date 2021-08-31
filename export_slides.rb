@@ -31,8 +31,8 @@ BigBlueButton.logger.info("Started exporting PDF for [#{meeting_id}]")
 @published_files = "/var/bigbluebutton/published/presentation/#{meeting_id}"
 
 # Creates scratch directories
-Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/frames")
-Dir.mkdir("#{@published_files}/presentation") unless File.exist?("#{@published_files}/presentation")
+FileUtils.mkdir_p(["#{@published_files}/frames", "#{@published_files}/presentation", "#{@published_files}/frames",
+                   "/var/bigbluebutton/published/document/#{meeting_id}"])
 
 # Setting the SVGZ option to true will write less data on the disk.
 SVGZ_COMPRESSION = false
@@ -44,6 +44,18 @@ REMOVE_REDUNDANT_SHAPES = false
 
 WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
+
+def add_greenlight_buttons(metadata)
+  meeting_id = metadata.xpath('recording/id').inner_text
+  hostname = metadata.xpath('recording/meta/bbb-origin-server-name').inner_text
+
+  metadata.xpath('recording/playback/format').children.first.content = "Slides"
+  metadata.xpath('recording/playback/link').children.first.content = "https://#{hostname}/presentation/#{meeting_id}/annotated-slides.pdf"
+
+  File.open("/var/bigbluebutton/published/document/#{meeting_id}/metadata.xml", "w") do |file|
+    file.write(metadata)
+  end
+end
 
 def base64_encode(path)
   return "" if File.directory?(path)
@@ -180,7 +192,7 @@ def remove_adjacent(array)
     index += 1
   end
 
-  array.compact
+  array.compact! || array
 end
 
 def render_whiteboard(slides, shapes)
@@ -265,6 +277,7 @@ def export_pdf
   render_whiteboard(slides, shapes)
 
   BigBlueButton.logger.info("Finished exporting PDF. Total: #{Time.now - start}")
+  add_greenlight_buttons(metadata)
 end
 
 export_pdf

@@ -10,6 +10,7 @@ def download(file)
   # Format: "https://hostname/presentation/meetingID/#{file}"
 
   path = "https://hostname/presentation/meetingID/#{file}"
+  path = "https://vmott40.in.tum.de/presentation/fccbbfd5ae98f6eb1e6bf57fc8970672da7244b6-1630411518050/#{file}"
 
   puts "Downloading #{path}"
 

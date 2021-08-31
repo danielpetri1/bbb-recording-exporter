@@ -50,7 +50,7 @@ def add_greenlight_buttons(metadata)
   hostname = metadata.xpath('recording/meta/bbb-origin-server-name').inner_text
 
   metadata.xpath('recording/playback/format').children.first.content = "Slides"
-  metadata.xpath('recording/playback/link').children.first.content = "https://#{hostname}/presentation/#{meeting_id}/annotated-slides.pdf"
+  metadata.xpath('recording/playback/link').children.first.content = "https://#{hostname}/presentation/#{meeting_id}/annotated_slides.pdf"
 
   File.open("/var/bigbluebutton/published/document/#{meeting_id}/metadata.xml", "w") do |file|
     file.write(metadata)
@@ -270,6 +270,7 @@ def export_pdf
   start = Time.now
 
   convert_whiteboard_shapes(Nokogiri::XML(File.open("#{@published_files}/shapes.svg")).remove_namespaces!)
+  metadata = Nokogiri::XML(File.open("#{@published_files}/metadata.xml"))
 
   shapes, slides = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
   slides = unique_slides(slides)
@@ -277,6 +278,7 @@ def export_pdf
   render_whiteboard(slides, shapes)
 
   BigBlueButton.logger.info("Finished exporting PDF. Total: #{Time.now - start}")
+  
   add_greenlight_buttons(metadata)
 end
 

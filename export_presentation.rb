@@ -20,7 +20,7 @@ FileUtils.mkdir_p(["#{@published_files}/chats", "#{@published_files}/cursor", "#
                    "#{@published_files}/timestamps"])
 
 # Setting the SVGZ option to true will write less data on the disk.
-SVGZ_COMPRESSION = false
+SVGZ_COMPRESSION = true
 
 # Set this to true if you've recompiled FFmpeg to enable external references. Writes less data on disk and is faster.
 FFMPEG_REFERENCE_SUPPORT = false
@@ -33,9 +33,9 @@ FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
 
 # Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
-REMOVE_REDUNDANT_SHAPES = false
+REMOVE_REDUNDANT_SHAPES = true
 
-BENCHMARK_FFMPEG = false
+BENCHMARK_FFMPEG = true
 BENCHMARK = BENCHMARK_FFMPEG ? "-benchmark " : ""
 
 THREADS = 4
@@ -56,7 +56,7 @@ CHAT_FONT_SIZE = 15
 CHAT_FONT_SIZE_X = (0.6 * CHAT_FONT_SIZE).to_i
 
 # Max. dimensions supported: 8032 x 32767
-CHAT_CANVAS_WIDTH = (8032 / CHAT_WIDTH) * CHAT_WIDTH
+CHAT_CANVAS_WIDTH = 640 # (8032 / CHAT_WIDTH) * CHAT_WIDTH
 CHAT_CANVAS_HEIGHT = (32_767 / CHAT_FONT_SIZE) * CHAT_FONT_SIZE
 
 # Dimensions of the whiteboard area
@@ -559,7 +559,7 @@ def render_video(duration, meeting_name)
   end
 
   render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} -threads #{THREADS} "
-  render << "-metadata title='#{meeting_name}' #{BENCHMARK} #{@published_files}/meeting-tmp.mp4"
+  render << "-metadata title=\"#{meeting_name}\" #{BENCHMARK} #{@published_files}/meeting-tmp.mp4"
 
   ffmpeg = system(render)
 

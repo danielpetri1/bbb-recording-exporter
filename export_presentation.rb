@@ -33,7 +33,7 @@ FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
 
 # Leave it as false for BBB >= 2.3 as it stopped supporting live whiteboard
-REMOVE_REDUNDANT_SHAPES = true
+REMOVE_REDUNDANT_SHAPES = false
 
 BENCHMARK_FFMPEG = true
 BENCHMARK = BENCHMARK_FFMPEG ? "-benchmark " : ""
@@ -429,7 +429,7 @@ def render_chat(chat_reader)
 
         duplicate_content.unshift(safe_message)
       end
-      
+
       duplicates.unshift([header, duplicate_content, svg_x])
       duplicates.pop
 
@@ -532,7 +532,6 @@ end
 def render_video(duration, meeting_name)
   # Determine if video had screensharing
   deskshare = File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
-
   render = "ffmpeg -f lavfi -i color=c=white:s=#{OUTPUT_WIDTH}x#{OUTPUT_HEIGHT} " \
           "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
           "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg " \

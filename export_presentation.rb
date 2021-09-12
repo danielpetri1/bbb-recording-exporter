@@ -172,7 +172,7 @@ def add_greenlight_buttons(metadata)
 
   metadata.xpath('recording/playback/format').children.first.content = "Video"
   metadata.xpath('recording/playback/link').children.first.content = "https://#{hostname}/presentation/#{meeting_id}/meeting.mp4"
-  
+
   File.open("/var/bigbluebutton/published/video/#{meeting_id}/metadata.xml", "w") do |file|
     file.write(metadata)
   end

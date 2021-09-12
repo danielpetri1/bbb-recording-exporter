@@ -26,6 +26,9 @@ SVGZ_COMPRESSION = true
 FFMPEG_REFERENCE_SUPPORT = false
 BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
 
+# Set this to true if you've recompiled FFmpeg with the movtext codec enabled
+CAPTION_SUPPORT = false
+
 # Video output quality: 0 is lossless, 51 is the worst. Default 23, 18 - 28 recommended
 CONSTANT_RATE_FACTOR = 23
 
@@ -673,7 +676,7 @@ def export_presentation
 
   render_video(duration, meeting_name)
   add_chapters(duration, slides)
-  add_captions
+  add_captions if CAPTION_SUPPORT
 
   FileUtils.mv("#{@published_files}/meeting-tmp.mp4", "#{@published_files}/meeting.mp4")
   puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{Time.now - start}"

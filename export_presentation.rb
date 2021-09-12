@@ -74,7 +74,7 @@ CHAT_FONT_SIZE = 15
 CHAT_FONT_SIZE_X = (0.6 * CHAT_FONT_SIZE).to_i
 
 # Max. dimensions supported: 8032 x 32767
-CHAT_CANVAS_WIDTH = (8032 / CHAT_WIDTH) * CHAT_WIDTH
+CHAT_CANVAS_WIDTH = 640 # (8032 / CHAT_WIDTH) * CHAT_WIDTH
 CHAT_CANVAS_HEIGHT = (32_767 / CHAT_FONT_SIZE) * CHAT_FONT_SIZE
 
 # Dimensions of the whiteboard area
@@ -588,7 +588,7 @@ def render_video(duration, meeting_name)
   end
 
   render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} -threads #{THREADS} "
-  render << "-metadata title='#{meeting_name}' #{BENCHMARK} #{@published_files}/meeting-tmp.mp4"
+  render << "-metadata title=\"#{meeting_name}\" #{BENCHMARK} #{@published_files}/meeting-tmp.mp4"
 
   ffmpeg = system(render)
 

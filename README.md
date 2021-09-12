@@ -49,7 +49,7 @@ Place the file `export_presentation.rb` in the `/usr/local/bigbluebutton/core/sc
   
 Do the same for the file `lib/interval_tree.rb`, moving it to `/usr/local/bigbluebutton/core/lib/recordandplayback`.
 
-After a session is over and the presentation is processed, the script will begin to export the recording as a single video file. It can be accessed and downloaded at https://`your.bbb.hostname`/presentation/`meeting-id`/meeting.mp4 once rendering completes.
+After a session is over and the presentation is processed, the script will begin to export the recording as a single video file. It can be accessed and downloaded at https://`your.bbb.hostname`/presentation/`meeting-id`/meeting.mp4 once rendering completes, or directly in the Greenlight interface.
 
 The meeting's ID is the alphanumeric string following the 2.3 in the recording's URL.
 
@@ -79,6 +79,8 @@ Less data can be written on the disk by turning `SVGZ_COMPRESSION` on.
 To make rendering faster and less resource-intensive, download FFMpeg's source code and replace the file `ffmpeg/libavcodec/librsvgdec.c` with the one in this directory. After compiling and installing FFMpeg, enable `FFMPEG_REFERENCE_SUPPORT` in `export_presentation.rb` . [Steps by @felcaetano](https://github.com/danielpetri1/bbb-recording-exporter/issues/44#issuecomment-904464887).
 
 The video output quality can be controlled with `CONSTANT_RATE_FACTOR`.
+
+It is advised to change the chat canvas size depending on your needs, since it noticeably affects rendering speeds. 
 
 ### Troubleshooting
 

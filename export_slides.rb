@@ -224,8 +224,6 @@ def svg_export(draw, slide_href, width, height, frame_number)
 end
 
 def unique_slides(slides)
-  p slides
-  i = 1/0
   # Only keep the last state of the slides, maintaining original order
   (0..slides.size - 1).each do |i|
     ((i + 1)..slides.size - 1).each do |j|

@@ -348,6 +348,7 @@ end
 
 def render_chat(chat_reader)
   messages = []
+  salt = Time.now.nsec
 
   chat_reader.each do |node|
     unless node.name == "chattimeline" &&
@@ -357,7 +358,7 @@ def render_chat(chat_reader)
     end
 
     name = node.attribute("name")
-    name = Digest.bubblebabble(name)[0..10] if HIDE_CHAT_NAMES
+    name = Digest::SHA1.bubblebabble(name << salt.to_s)[0..10] if HIDE_CHAT_NAMES
 
     messages << [node.attribute("in").to_f, name, node.attribute("message")]
   end
@@ -729,7 +730,7 @@ def export_presentation
   timestamps = timestamps.select { |t| t <= duration }
 
   # Create video assets
-  render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml")))
+  render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml"))) if !HIDE_CHAT
   render_cursor(panzooms, Nokogiri::XML::Reader(File.open("#{@published_files}/cursor.xml")))
   render_whiteboard(panzooms, slides, shapes, timestamps)
 

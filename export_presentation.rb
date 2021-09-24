@@ -478,8 +478,8 @@ def render_chat(chat_reader)
 
   # Dynamically adjust the chat canvas size for the fastest possible export
   cropped_chat_canvas_width = svg_x + CHAT_WIDTH
-  cropped_chat_canvas_height = (cropped_chat_canvas_width == CHAT_WIDTH) ? svg_y : CHAT_CANVAS_HEIGHT
-  
+  cropped_chat_canvas_height = cropped_chat_canvas_width == CHAT_WIDTH ? svg_y : CHAT_CANVAS_HEIGHT
+
   builder = Nokogiri::XML(builder.target!)
   builder.root.set_attribute('width', cropped_chat_canvas_width)
   builder.root.set_attribute('height', cropped_chat_canvas_height)
@@ -730,7 +730,7 @@ def export_presentation
   timestamps = timestamps.select { |t| t <= duration }
 
   # Create video assets
-  render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml"))) if !HIDE_CHAT
+  render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml"))) unless HIDE_CHAT
   render_cursor(panzooms, Nokogiri::XML::Reader(File.open("#{@published_files}/cursor.xml")))
   render_whiteboard(panzooms, slides, shapes, timestamps)
 
@@ -753,7 +753,7 @@ export_presentation
 
 # Delete the contents of the scratch directories
 FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames",
-"#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg",
-"#{@published_files}/meeting_metadata"])
+                 "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg",
+                 "#{@published_files}/meeting_metadata"])
 
 exit(0)

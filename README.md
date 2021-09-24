@@ -19,7 +19,7 @@ Server-side version of the script that enables users to download BigBlueButton 2
 
 ✅ Chapters <br  />
 
-✅ Chat <br  />
+✅ Chat (with an option to anonymize names) <br  />
 
 ✅ Cursor <br  />
 
@@ -57,6 +57,8 @@ Existing recordings can be re-rendered by running the exporting script on an ind
 
     ./export_presentation.rb -m <meeting_id>
 
+Note that this will stop automatic exports! See the "Troubleshooting" section below.
+
 To re-render all existing recordings, run
 
     bbb-record --rebuildall
@@ -65,7 +67,7 @@ If you do not have access to a BBB server, check out the branch 'client-side'.
 
 For caption support, recompile FFmpeg with the `movtext` encoder enabled and uncomment the `add_captions` method.
 
-To add a download button to Greenlight's UI, change  [these](https://github.com/danielpetri1/greenlight/commit/d92f8502e3dacc87fb6ae6b05c91a2353010d884)  files.
+The chat component can be disabled by turning `HIDE_CHAT` on. If you want to keep the messages but anonymize the names, set `HIDE_CHAT_NAMES` to true.
 
 ### Requirements
 
@@ -74,17 +76,15 @@ Root access to a BBB 2.3 server.
 ###  Rendering options 
 If your server supports animated strokes on the whiteboard, set the flag `REMOVE_REDUNDANT_SHAPES` to **true** in `export_presentation.rb`.
 
-Less data can be written on the disk by turning `SVGZ_COMPRESSION` on.
+Less data can be written on the disk by turning `SVGZ_COMPRESSION` on. Disabling 
 
-To make rendering faster and less resource-intensive, download FFMpeg's source code and replace the file `ffmpeg/libavcodec/librsvgdec.c` with the one in this directory. After compiling and installing FFMpeg, enable `FFMPEG_REFERENCE_SUPPORT` in `export_presentation.rb` . [Steps by @felcaetano](https://github.com/danielpetri1/bbb-recording-exporter/issues/44#issuecomment-904464887).
+To make rendering less resource-intensive, download FFMpeg's source code and replace the file `ffmpeg/libavcodec/librsvgdec.c` with the one in this directory. After compiling and installing FFMpeg, enable `FFMPEG_REFERENCE_SUPPORT` in `export_presentation.rb` . [Steps by @felcaetano](https://github.com/danielpetri1/bbb-recording-exporter/issues/44#issuecomment-904464887).
 
 The video output quality can be controlled with `CONSTANT_RATE_FACTOR`.
 
-It is advised to change the chat canvas size depending on your needs, since it noticeably affects rendering speeds. 
-
 ### Troubleshooting
 
-Exports don't start after the meeting ends: `/var/log/bigbluebutton/post_publish.log` must be chowned to `bigbluebutton:bigbluebutton`
+Exports don't start after the meeting ends: `/var/log/bigbluebutton/post_publish.log` and `/var/bigbluebutton/published/video/` must be chowned to `bigbluebutton:bigbluebutton`
  
 
 ### Get in touch

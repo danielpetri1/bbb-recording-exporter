@@ -21,10 +21,10 @@ FileUtils.mkdir_p(["#{@published_files}/chats", "#{@published_files}/cursor", "#
                    "#{@published_files}/timestamps"])
 
 # Setting the SVGZ option to true will write less data on the disk.
-SVGZ_COMPRESSION = false
+SVGZ_COMPRESSION = true
 
 # Set this to true if you've recompiled FFmpeg to enable external references. Writes less data on disk and is faster.
-FFMPEG_REFERENCE_SUPPORT = true
+FFMPEG_REFERENCE_SUPPORT = false
 BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
 
 # Set this to true if you've recompiled FFmpeg with the movtext codec enabled

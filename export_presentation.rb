@@ -24,7 +24,7 @@ FileUtils.mkdir_p(["#{@published_files}/chats", "#{@published_files}/cursor", "#
 SVGZ_COMPRESSION = false
 
 # Set this to true if you've recompiled FFmpeg to enable external references. Writes less data on disk and is faster.
-FFMPEG_REFERENCE_SUPPORT = false
+FFMPEG_REFERENCE_SUPPORT = true
 BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
 
 # Set this to true if you've recompiled FFmpeg with the movtext codec enabled
@@ -321,6 +321,7 @@ end
 
 def render_chat(chat_reader)
   messages = []
+  salt = Time.now.nsec
 
   chat_reader.each do |node|
     unless node.name == "chattimeline" &&
@@ -330,7 +331,7 @@ def render_chat(chat_reader)
     end
 
     name = node.attribute("name")
-    name = Digest.bubblebabble(name)[0..10] if HIDE_CHAT_NAMES
+    name = Digest::SHA1.bubblebabble(name << salt.to_s)[0..10] if HIDE_CHAT_NAMES
 
     messages << [node.attribute("in").to_f, name, node.attribute("message")]
   end
@@ -705,7 +706,7 @@ def export_presentation
   timestamps = timestamps.select { |t| t <= duration }
 
   # Create video assets
-  render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml")))
+  render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml"))) if !HIDE_CHAT
   render_cursor(panzooms, Nokogiri::XML::Reader(File.open("#{@published_files}/cursor.xml")))
   render_whiteboard(panzooms, slides, shapes, timestamps)
 

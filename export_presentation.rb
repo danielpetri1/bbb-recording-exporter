@@ -24,7 +24,7 @@ FileUtils.mkdir_p(["#{@published_files}/chats", "#{@published_files}/cursor", "#
 SVGZ_COMPRESSION = false
 
 # Set this to true if you've recompiled FFmpeg to enable external references. Writes less data on disk and is faster.
-FFMPEG_REFERENCE_SUPPORT = true
+FFMPEG_REFERENCE_SUPPORT = false
 BASE_URI = FFMPEG_REFERENCE_SUPPORT ? "-base_uri #{@published_files}" : ""
 
 # Set this to true if you've recompiled FFmpeg with the movtext codec enabled
@@ -330,7 +330,7 @@ def render_chat(chat_reader)
     end
 
     name = node.attribute("name")
-    name = Digest.bubblebabble(name)[0..4] if HIDE_CHAT_NAMES
+    name = Digest.bubblebabble(name)[0..10] if HIDE_CHAT_NAMES
 
     messages << [node.attribute("in").to_f, name, node.attribute("message")]
   end
@@ -449,9 +449,17 @@ def render_chat(chat_reader)
     end
   end
 
+  # Dynamically adjust the chat canvas size for the fastest possible export
+  cropped_chat_canvas_width = svg_x + CHAT_WIDTH
+  cropped_chat_canvas_height = (cropped_chat_canvas_width == CHAT_WIDTH) ? svg_y : CHAT_CANVAS_HEIGHT
+  
+  builder = Nokogiri::XML(builder.target!)
+  builder.root.set_attribute('width', cropped_chat_canvas_width)
+  builder.root.set_attribute('height', cropped_chat_canvas_height)
+
   # Saves chat as SVG / SVGZ file
   File.open("#{@published_files}/chats/chat.svg", "w", 0o600) do |file|
-    file.write(builder.target!)
+    file.write(builder)
   end
 
   File.open("#{@published_files}/timestamps/chat_timestamps", "w", 0o600) do |file|
@@ -707,8 +715,8 @@ def export_presentation
   puts "Beginning to render video"
 
   render_video(duration, meeting_name)
-  # add_chapters(duration, slides)
-  # add_captions if CAPTION_SUPPORT
+  add_chapters(duration, slides)
+  add_captions if CAPTION_SUPPORT
 
   FileUtils.mv("#{@published_files}/meeting-tmp.mp4", "#{@published_files}/meeting.mp4")
   puts "Exported recording available at #{@published_files}/meeting.mp4. Render time: #{Time.now - start}"
@@ -717,8 +725,8 @@ end
 export_presentation
 
 # Delete the contents of the scratch directories
-# FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames",
-# "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg",
-# "#{@published_files}/meeting_metadata"])
+FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames",
+"#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg",
+"#{@published_files}/meeting_metadata"])
 
 exit(0)

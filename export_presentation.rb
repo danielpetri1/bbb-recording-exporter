@@ -58,6 +58,8 @@ CHAT_HEIGHT = OUTPUT_HEIGHT - WEBCAMS_HEIGHT
 HIDE_CHAT = false
 HIDE_CHAT_NAMES = false
 
+HIDE_DESKSHARE = false
+
 # Assumes a monospaced font with a width to aspect ratio of 3:5
 CHAT_FONT_SIZE = 15
 CHAT_FONT_SIZE_X = (0.6 * CHAT_FONT_SIZE).to_i
@@ -452,8 +454,8 @@ def render_chat(chat_reader)
 
   # Dynamically adjust the chat canvas size for the fastest possible export
   cropped_chat_canvas_width = svg_x + CHAT_WIDTH
-  cropped_chat_canvas_height = (cropped_chat_canvas_width == CHAT_WIDTH) ? svg_y : CHAT_CANVAS_HEIGHT
-  
+  cropped_chat_canvas_height = cropped_chat_canvas_width == CHAT_WIDTH ? svg_y : CHAT_CANVAS_HEIGHT
+
   builder = Nokogiri::XML(builder.target!)
   builder.root.set_attribute('width', cropped_chat_canvas_width)
   builder.root.set_attribute('height', cropped_chat_canvas_height)
@@ -464,8 +466,6 @@ def render_chat(chat_reader)
   end
 
   File.open("#{@published_files}/timestamps/chat_timestamps", "w", 0o600) do |file|
-    file.puts "0 overlay@msg x 0, overlay@msg y 0;" if overlay_position.empty?
-
     overlay_position.each do |timestamp, x, y|
       file.puts "#{timestamp} crop@c x #{x}, crop@c y #{y};"
     end
@@ -552,14 +552,14 @@ end
 
 def render_video(duration, meeting_name)
   # Determine if video had screensharing / chat messages
-  deskshare = File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
-  chat = File.file?("#{@published_files}/chats/chat.svg")
+  deskshare = !HIDE_DESKSHARE && File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
+  chat = !HIDE_CHAT && File.file?("#{@published_files}/chats/chat.svg")
 
   render = "ffmpeg -f lavfi -i color=c=white:s=#{OUTPUT_WIDTH}x#{OUTPUT_HEIGHT} " \
             "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
             "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg "
 
-  if chat && !HIDE_CHAT
+  if chat
     render << "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
               "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} "
 
@@ -706,7 +706,7 @@ def export_presentation
   timestamps = timestamps.select { |t| t <= duration }
 
   # Create video assets
-  render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml"))) if !HIDE_CHAT
+  render_chat(Nokogiri::XML::Reader(File.open("#{@published_files}/slides_new.xml"))) unless HIDE_CHAT
   render_cursor(panzooms, Nokogiri::XML::Reader(File.open("#{@published_files}/cursor.xml")))
   render_whiteboard(panzooms, slides, shapes, timestamps)
 
@@ -727,7 +727,7 @@ export_presentation
 
 # Delete the contents of the scratch directories
 FileUtils.rm_rf(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames",
-"#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg",
-"#{@published_files}/meeting_metadata"])
+                 "#{@published_files}/timestamps", "#{@published_files}/shapes_modified.svg",
+                 "#{@published_files}/meeting_metadata"])
 
 exit(0)

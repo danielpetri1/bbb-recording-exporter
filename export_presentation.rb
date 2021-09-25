@@ -73,6 +73,8 @@ CHAT_HEIGHT = OUTPUT_HEIGHT - WEBCAMS_HEIGHT
 HIDE_CHAT = false
 HIDE_CHAT_NAMES = false
 
+HIDE_DESKSHARE = false
+
 # Assumes a monospaced font with a width to aspect ratio of 3:5
 CHAT_FONT_SIZE = 15
 CHAT_FONT_SIZE_X = (0.6 * CHAT_FONT_SIZE).to_i
@@ -490,8 +492,6 @@ def render_chat(chat_reader)
   end
 
   File.open("#{@published_files}/timestamps/chat_timestamps", "w", 0o600) do |file|
-    file.puts "0 overlay@msg x 0, overlay@msg y 0;" if overlay_position.empty?
-
     overlay_position.each do |timestamp, x, y|
       file.puts "#{timestamp} crop@c x #{x}, crop@c y #{y};"
     end
@@ -578,8 +578,8 @@ end
 
 def render_video(duration, meeting_name)
   # Determine if video had screensharing / chat messages
-  deskshare = File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
-  chat = File.file?("#{@published_files}/chats/chat.svg")
+  deskshare = !HIDE_DESKSHARE && File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
+  chat = !HIDE_CHAT && File.file?("#{@published_files}/chats/chat.svg")
 
   render = "ffmpeg -f lavfi -i color=c=white:s=#{OUTPUT_WIDTH}x#{OUTPUT_HEIGHT} " \
             "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \

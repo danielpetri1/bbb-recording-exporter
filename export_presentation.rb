@@ -585,7 +585,7 @@ def render_video(duration, meeting_name)
             "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
             "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg "
 
-  if chat && !HIDE_CHAT
+  if chat
     render << "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
               "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} "
 

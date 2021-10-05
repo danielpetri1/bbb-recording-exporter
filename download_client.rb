@@ -10,7 +10,6 @@ def download(file)
   # Format: "https://hostname/presentation/meetingID/#{file}"
 
   path = "https://hostname/presentation/meetingID/#{file}"
-  
 
   puts "Downloading #{path}"
 
@@ -24,7 +23,8 @@ end
 # Video: 'video/webcams.mp4', 'deskshare/deskshare.mp4'
 # Chat: 'slides_new.xml'
 
-['shapes.svg', 'cursor.xml', 'panzooms.xml', 'presentation_text.json', 'captions.json', 'metadata.xml', 'video/webcams.webm', 'deskshare/deskshare.webm', 'slides_new.xml'].each do |get|
+['shapes.svg', 'cursor.xml', 'panzooms.xml', 'presentation_text.json', 'captions.json', 'metadata.xml',
+ 'video/webcams.webm', 'deskshare/deskshare.webm', 'slides_new.xml'].each do |get|
   download(get)
 end
 
@@ -36,8 +36,8 @@ slides = @doc.xpath('//xmlns:image', 'xmlns' => 'http://www.w3.org/2000/svg', 'x
 # Download all captions
 json = JSON.parse(File.read('captions.json'))
 
-for i in 0..json.length - 1 do
-  download "caption_#{json[i]["locale"]}.vtt"
+(0..json.length - 1).each do |i|
+  download "caption_#{json[i]['locale']}.vtt"
 end
 
 # Downloads each slide

@@ -77,8 +77,9 @@ DESKSHARE_INPUT_WIDTH = 1280
 DESKSHARE_INPUT_HEIGHT = 720
 
 # Center the deskshare
-DESKSHARE_Y_OFFSET = ((SLIDES_HEIGHT - ([SLIDES_WIDTH.to_f / DESKSHARE_INPUT_WIDTH,
-                                         SLIDES_HEIGHT.to_f / DESKSHARE_INPUT_HEIGHT].min * DESKSHARE_INPUT_HEIGHT)) / 2).to_i
+DESKSHARE_Y_OFFSET = ((SLIDES_HEIGHT -
+([SLIDES_WIDTH.to_f / DESKSHARE_INPUT_WIDTH,
+  SLIDES_HEIGHT.to_f / DESKSHARE_INPUT_HEIGHT].min * DESKSHARE_INPUT_HEIGHT)) / 2).to_i
 
 WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
@@ -99,8 +100,8 @@ def add_captions
   end
 
   render = "ffmpeg -i #{@published_files}/meeting-tmp.mp4 #{caption_input} " \
-            "-map 0:v -map 0:a #{maps} -c:v copy -c:a copy -c:s mov_text #{language_names} " \
-            "-y #{@published_files}/meeting_captioned.mp4"
+           "-map 0:v -map 0:a #{maps} -c:v copy -c:a copy -c:s mov_text #{language_names} " \
+           "-y #{@published_files}/meeting_captioned.mp4"
 
   ffmpeg = system(render)
 
@@ -148,7 +149,11 @@ def add_chapters(duration, slides)
     file << chapter
   end
 
-  ffmpeg = system("ffmpeg -i #{@published_files}/meeting-tmp.mp4 -i #{@published_files}/meeting_metadata -map_metadata 1 -map_chapters 1 -codec copy -y -t #{duration} #{@published_files}/meeting_chapters.mp4")
+  render = "ffmpeg -i #{@published_files}/meeting-tmp.mp4 " \
+           "-i #{@published_files}/meeting_metadata -map_metadata 1 " \
+           "-map_chapters 1 -codec copy -y -t #{duration} #{@published_files}/meeting_chapters.mp4"
+
+  ffmpeg = system(render)
   if ffmpeg
     FileUtils.mv("#{@published_files}/meeting_chapters.mp4", "#{@published_files}/meeting-tmp.mp4")
   else
@@ -321,7 +326,7 @@ def remove_adjacent(array)
   array.compact! || array
 end
 
-def render_chat(chat_reader)
+def parse_chat(chat_reader)
   messages = []
   salt = Time.now.nsec
 
@@ -338,6 +343,11 @@ def render_chat(chat_reader)
     messages << [node.attribute("in").to_f, name, node.attribute("message")]
   end
 
+  messages
+end
+
+def render_chat(chat_reader)
+  messages = parse_chat(chat_reader)
   return if messages.empty?
 
   # Text coordinates on the SVG file
@@ -375,7 +385,7 @@ def render_chat(chat_reader)
         last_linebreak_pos = chat_index if chat[chat_index] == " "
 
         if line_index >= max_message_length
-          last_linebreak_pos = last_linebreak_pos <= chat_index - max_message_length ? chat_index : last_linebreak_pos
+          last_linebreak_pos = chat_index if last_linebreak_pos <= chat_index - max_message_length
 
           line_breaks << last_linebreak_pos
 
@@ -531,8 +541,8 @@ def render_cursor(panzooms, cursor_reader)
       cursor_y *= scale_factor
 
       # Translate given difference to new on-screen dimensions
-      x_offset = (SLIDES_WIDTH - scale_factor * width) / 2
-      y_offset = (SLIDES_HEIGHT - scale_factor * height) / 2
+      x_offset = (SLIDES_WIDTH - (scale_factor * width)) / 2
+      y_offset = (SLIDES_HEIGHT - (scale_factor * height)) / 2
 
       # Center cursor
       cursor_x -= 8
@@ -556,49 +566,53 @@ def render_video(duration, meeting_name)
   chat = !HIDE_CHAT && File.file?("#{@published_files}/chats/chat.svg")
 
   render = "ffmpeg -f lavfi -i color=c=white:s=#{OUTPUT_WIDTH}x#{OUTPUT_HEIGHT} " \
-            "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
-            "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg "
+           "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
+           "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg "
 
   if chat
     render << "-framerate 1 -loop 1 -i #{@published_files}/chats/chat.svg " \
               "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} "
 
-    if deskshare
-       render << "-i #{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION} -filter_complex " \
-       "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
-       "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=#{CHAT_WIDTH}:h=#{CHAT_HEIGHT}:x=0:y=0[chat];" \
-       "[4]scale=w=#{WEBCAMS_WIDTH}:h=#{WEBCAMS_HEIGHT}[webcams];[5]scale=w=#{SLIDES_WIDTH}:h=#{SLIDES_HEIGHT}:force_original_aspect_ratio=1[deskshare];" \
-       "[0][deskshare]overlay=x=#{WEBCAMS_WIDTH}:y=#{DESKSHARE_Y_OFFSET}[screenshare];" \
-       "[screenshare][1]overlay=x=#{WEBCAMS_WIDTH}[slides];" \
-       "[slides][cursor]overlay@m[whiteboard];" \
-       "[whiteboard][chat]overlay=y=#{WEBCAMS_HEIGHT}[chats];" \
-       "[chats][webcams]overlay' "
-     else
-        render << "-filter_complex '[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
-         "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps,crop@c=w=#{CHAT_WIDTH}:h=#{CHAT_HEIGHT}:x=0:y=0[chat];" \
+    render << if deskshare
+       "-i #{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION} -filter_complex " \
+         "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
+         "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps," \
+         "crop@c=w=#{CHAT_WIDTH}:h=#{CHAT_HEIGHT}:x=0:y=0[chat];" \
          "[4]scale=w=#{WEBCAMS_WIDTH}:h=#{WEBCAMS_HEIGHT}[webcams];" \
-         "[0][1]overlay=x=#{WEBCAMS_WIDTH}[slides];" \
+         "[5]scale=w=#{SLIDES_WIDTH}:h=#{SLIDES_HEIGHT}:force_original_aspect_ratio=1[deskshare];" \
+         "[0][deskshare]overlay=x=#{WEBCAMS_WIDTH}:y=#{DESKSHARE_Y_OFFSET}[screenshare];" \
+         "[screenshare][1]overlay=x=#{WEBCAMS_WIDTH}[slides];" \
          "[slides][cursor]overlay@m[whiteboard];" \
-         "[whiteboard][chat]overlay=y=#{WEBCAMS_HEIGHT}[chats];[chats][webcams]overlay' "
-     end
+         "[whiteboard][chat]overlay=y=#{WEBCAMS_HEIGHT}[chats];" \
+         "[chats][webcams]overlay' "
+     else
+        "-filter_complex '[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
+          "[3]sendcmd=f=#{@published_files}/timestamps/chat_timestamps," \
+          "crop@c=w=#{CHAT_WIDTH}:h=#{CHAT_HEIGHT}:x=0:y=0[chat];" \
+          "[4]scale=w=#{WEBCAMS_WIDTH}:h=#{WEBCAMS_HEIGHT}[webcams];" \
+          "[0][1]overlay=x=#{WEBCAMS_WIDTH}[slides];" \
+          "[slides][cursor]overlay@m[whiteboard];" \
+          "[whiteboard][chat]overlay=y=#{WEBCAMS_HEIGHT}[chats];[chats][webcams]overlay' "
+               end
   else
     render << "-i #{@published_files}/video/webcams.#{VIDEO_EXTENSION} "
 
-    if deskshare
-      render << "-i #{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION} -filter_complex " \
-      "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
-      "[3]scale=w=#{WEBCAMS_WIDTH}:h=#{WEBCAMS_HEIGHT}[webcams];[4]scale=w=#{SLIDES_WIDTH}:h=#{SLIDES_HEIGHT}:force_original_aspect_ratio=1[deskshare];" \
-      "[0][deskshare]overlay=x=#{WEBCAMS_WIDTH}:y=#{DESKSHARE_Y_OFFSET}[screenshare];" \
-      "[screenshare][1]overlay=x=#{WEBCAMS_WIDTH}[slides];" \
-      "[slides][cursor]overlay@m[whiteboard];" \
-      "[whiteboard][webcams]overlay' "
+    render << if deskshare
+      "-i #{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION} -filter_complex " \
+        "'[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
+        "[3]scale=w=#{WEBCAMS_WIDTH}:h=#{WEBCAMS_HEIGHT}[webcams];" \
+        "[4]scale=w=#{SLIDES_WIDTH}:h=#{SLIDES_HEIGHT}:force_original_aspect_ratio=1[deskshare];" \
+        "[0][deskshare]overlay=x=#{WEBCAMS_WIDTH}:y=#{DESKSHARE_Y_OFFSET}[screenshare];" \
+        "[screenshare][1]overlay=x=#{WEBCAMS_WIDTH}[slides];" \
+        "[slides][cursor]overlay@m[whiteboard];" \
+        "[whiteboard][webcams]overlay' "
     else
-      render << "-filter_complex '[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
-      "[3]scale=w=#{WEBCAMS_WIDTH}:h=#{WEBCAMS_HEIGHT}[webcams];" \
-      "[0][1]overlay=x=#{WEBCAMS_WIDTH}[slides];" \
-      "[slides][cursor]overlay@m[whiteboard];" \
-      "[whiteboard][webcams]overlay' "
-    end
+      "-filter_complex '[2]sendcmd=f=#{@published_files}/timestamps/cursor_timestamps[cursor];" \
+        "[3]scale=w=#{WEBCAMS_WIDTH}:h=#{WEBCAMS_HEIGHT}[webcams];" \
+        "[0][1]overlay=x=#{WEBCAMS_WIDTH}[slides];" \
+        "[slides][cursor]overlay@m[whiteboard];" \
+        "[whiteboard][webcams]overlay' "
+              end
   end
 
   render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} -threads #{THREADS} " \
@@ -697,7 +711,8 @@ def export_presentation
   duration = metadata.xpath('recording/playback/duration').inner_text.to_f / 1000
   meeting_name = metadata.xpath('recording/meta/meetingName').inner_text
 
-  shapes, slides, timestamps = parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
+  shapes, slides, timestamps =
+    parse_whiteboard_shapes(Nokogiri::XML::Reader(File.open("#{@published_files}/shapes_modified.svg")))
   panzooms, timestamps = parse_panzooms(Nokogiri::XML::Reader(File.open("#{@published_files}/panzooms.xml")),
                                         timestamps)
 

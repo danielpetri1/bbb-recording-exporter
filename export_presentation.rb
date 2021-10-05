@@ -63,6 +63,7 @@ HIDE_DESKSHARE = false
 # Assumes a monospaced font with a width to aspect ratio of 3:5
 CHAT_FONT_SIZE = 15
 CHAT_FONT_SIZE_X = (0.6 * CHAT_FONT_SIZE).to_i
+CHAT_STARTING_OFFSET = CHAT_HEIGHT + CHAT_FONT_SIZE
 
 # Max. dimensions supported: 8032 x 32767
 CHAT_CANVAS_WIDTH = (8032 / CHAT_WIDTH) * CHAT_WIDTH
@@ -86,17 +87,19 @@ WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
 
 def add_captions
   json = JSON.parse(File.read('captions.json'))
+  caption_amount = json.length
 
-  return if json.length.zero?
+  return if caption_amount.zero?
 
   caption_input = ""
   maps = ""
   language_names = ""
 
-  (0..json.length - 1).each do |i|
-     caption_input << "-i #{@published_files}/caption_#{json[i]['locale']}.vtt "
+  (0..caption_amount - 1).each do |i|
+     caption = json[i]
+     caption_input << "-i #{@published_files}/caption_#{caption['locale']}.vtt "
      maps << "-map #{i + 1} "
-     language_names << "-metadata:s:s:#{i} language=#{json[i]['localeName'].downcase[0..2]} "
+     language_names << "-metadata:s:s:#{i} language=#{caption['localeName'].downcase[0..2]} "
   end
 
   render = "ffmpeg -i #{@published_files}/meeting-tmp.mp4 #{caption_input} " \
@@ -352,7 +355,7 @@ def render_chat(chat_reader)
 
   # Text coordinates on the SVG file
   svg_x = 0
-  svg_y = CHAT_HEIGHT + CHAT_FONT_SIZE
+  svg_y = CHAT_STARTING_OFFSET
 
   # Chat viewbox coordinates
   chat_x = 0
@@ -381,7 +384,8 @@ def render_chat(chat_reader)
       line_index = 0
       last_linebreak_pos = 0
 
-      (0..chat.length - 1).each do |chat_index|
+      chat_length = chat.length - 1
+      (0..chat_length).each do |chat_index|
         last_linebreak_pos = chat_index if chat[chat_index] == " "
 
         if line_index >= max_message_length
@@ -400,7 +404,7 @@ def render_chat(chat_reader)
         line_wraps << [a + 1, b]
       end
 
-      line_wraps << [line_breaks.last + 1, chat.length - 1]
+      line_wraps << [line_breaks.last + 1, chat_length]
 
       # Message height equals the line break amount + the line for the name / time + the empty line afterwards
       message_height = (line_wraps.size + 2) * CHAT_FONT_SIZE
@@ -412,19 +416,20 @@ def render_chat(chat_reader)
         duplicate_y = CHAT_HEIGHT
         duplicates.each do |header, duplicate_content, duplicate_x|
           break if header.nil? || duplicate_y.negative?
+          duplicate_x += CHAT_WIDTH
 
           duplicate_content.each do |content|
             duplicate_y -= CHAT_FONT_SIZE
-            builder.text(x: duplicate_x + CHAT_WIDTH, y: duplicate_y) { builder << content }
+            builder.text(x: duplicate_x, y: duplicate_y) { builder << content }
           end
 
           duplicate_y -= CHAT_FONT_SIZE
-          builder.text(x: duplicate_x + CHAT_WIDTH, y: duplicate_y, "font-weight" => "bold") { builder << header }
+          builder.text(x: duplicate_x, y: duplicate_y, "font-weight" => "bold") { builder << header }
           duplicate_y -= CHAT_FONT_SIZE
         end
 
         # Set coordinates to new column
-        svg_y = CHAT_HEIGHT + CHAT_FONT_SIZE
+        svg_y = CHAT_STARTING_OFFSET
         svg_x += CHAT_WIDTH
 
         chat_x += CHAT_WIDTH
@@ -467,8 +472,10 @@ def render_chat(chat_reader)
   cropped_chat_canvas_height = cropped_chat_canvas_width == CHAT_WIDTH ? svg_y : CHAT_CANVAS_HEIGHT
 
   builder = Nokogiri::XML(builder.target!)
-  builder.root.set_attribute('width', cropped_chat_canvas_width)
-  builder.root.set_attribute('height', cropped_chat_canvas_height)
+
+  builder_root = builder.root
+  builder_root.set_attribute('width', cropped_chat_canvas_width)
+  builder_root.set_attribute('height', cropped_chat_canvas_height)
 
   # Saves chat as SVG / SVGZ file
   File.open("#{@published_files}/chats/chat.svg", "w", 0o600) do |file|
@@ -637,17 +644,15 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
 
   # Render the visible frame for each interval
   File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w", 0o600) do |file|
-    slide_number = 0
-    slide = slides[slide_number]
+    slide = slides.first
     view_box = ""
 
     intervals.each_cons(2).each do |interval_start, interval_end|
       # Get view_box parameter of the current slide
       _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
 
-      if slide_number < slides.size && interval_start >= slides[slide_number].begin
-        slide = slides[slide_number]
-        slide_number += 1
+      if !slides.empty? && interval_start >= slide.begin
+        slide = slides.shift
       end
 
       draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)

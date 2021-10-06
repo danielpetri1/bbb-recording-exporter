@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: false
 
-require "base64"
 require "builder"
 require "csv"
 require "combine_pdf"
@@ -16,7 +15,6 @@ include IntervalTree
 @published_files = File.expand_path(".")
 
 # Creates scratch directories
-Dir.mkdir("#{@published_files}/frames") unless File.exist?("#{@published_files}/frames")
 Dir.mkdir("#{@published_files}/presentation") unless File.exist?("#{@published_files}/presentation")
 
 # Setting the SVGZ option to true will write less data on the disk.
@@ -30,13 +28,6 @@ REMOVE_REDUNDANT_SHAPES = false
 WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
 
-def base64_encode(path)
-  return "" if File.directory?(path)
-
-  data = File.open(path).read
-  "data:image/#{File.extname(path).delete('.')};base64,#{Base64.strict_encode64(data)}"
-end
-
 def convert_whiteboard_shapes(whiteboard)
   # Find shape elements
   whiteboard.xpath("svg/g/g").each do |annotation|
@@ -46,18 +37,13 @@ def convert_whiteboard_shapes(whiteboard)
     annotation.set_attribute("style", style)
 
     shape = annotation.attribute("shape").to_s
-    # Convert polls to data schema
+
     if shape.include? "poll"
       poll = annotation.element_children.first
-
-      path = "#{@published_files}/#{poll.attribute('href')}"
       poll.remove_attribute("href")
-
       poll.add_namespace_definition("xlink", "http://www.w3.org/1999/xlink")
 
-      data = base64_encode(path)
-
-      poll.set_attribute("xlink:href", data)
+      poll.set_attribute("xlink:href", "#{@published_files}/#{poll.attribute('href')}")
     end
 
     # Convert XHTML to SVG so that text can be shown
@@ -128,14 +114,10 @@ def parse_whiteboard_shapes(shape_reader)
       slide_in = node.attribute("in").to_f
       slide_out = node.attribute("out").to_f
 
-      # Image paths need to follow the URI Data Scheme (for slides and polls)
       path = "#{@published_files}/#{node.attribute('href')}"
-
       next if path.include?('deskshare')
 
-      data = base64_encode(path)
-
-      slides << WhiteboardSlide.new(data, slide_in, slide_out, node.attribute("width").to_f, node.attribute("height"))
+      slides << WhiteboardSlide.new(path, slide_in, slide_out, node.attribute("width").to_f, node.attribute("height"))
     end
 
     next unless node_name == "g" && node_class == "shape"
@@ -182,19 +164,22 @@ def render_whiteboard(slides, shapes)
 
     svg_export(draw, slide.href, slide.width, slide.height, frame_number)
 
-    pdf = system("rsvg-convert -f pdf -o frames/frame#{frame_number}.pdf frames/frame#{frame_number}.#{FILE_EXTENSION}")
+    cmd = "rsvg-convert -f pdf -o #{@published_files}/presentation/frame#{frame_number}.pdf " \
+          "#{@published_files}/presentation/frame#{frame_number}.#{FILE_EXTENSION}"
+
+    pdf = system(cmd)
 
     unless pdf
       warn("An error occurred generating the PDF for slide #{frame_number}")
       exit(false)
     end
 
-    merged << CombinePDF.load("frames/frame#{frame_number}.pdf")
+    merged << CombinePDF.load("#{@published_files}/presentation/frame#{frame_number}.pdf")
 
     frame_number += 1
   end
 
-  merged.save "annotated_slides.pdf"
+  merged.save "#{@published_files}/annotated_slides.pdf"
 end
 
 def svg_export(draw, slide_href, width, height, frame_number)
@@ -212,7 +197,7 @@ def svg_export(draw, slide_href, width, height, frame_number)
     end
   end
 
-  File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w", 0o600) do |svg|
+  File.open("#{@published_files}/presentation/frame#{frame_number}.#{FILE_EXTENSION}", "w", 0o600) do |svg|
     if SVGZ_COMPRESSION
       svgz = Zlib::GzipWriter.new(svg, Zlib::BEST_SPEED)
       svgz.write(builder.target!)
@@ -225,8 +210,10 @@ end
 
 def unique_slides(slides)
   # Only keep the last state of the slides, maintaining original order
-  (0..slides.size - 1).each do |i|
-    ((i + 1)..slides.size - 1).each do |j|
+  slides_size = slides.size - 1
+
+  (0..slides_size).each do |i|
+    ((i + 1)..slides_size).each do |j|
       next if slides[i].nil? || slides[j].nil?
       if slides[i].href == slides[j].href
         slides[i] = slides[j]
@@ -235,7 +222,7 @@ def unique_slides(slides)
     end
   end
 
-  slides.compact || slides
+  slides.compact! || slides
 end
 
 def export_pdf
@@ -255,8 +242,5 @@ def export_pdf
 end
 
 export_pdf
-
-# Delete the contents of the scratch directories
-FileUtils.rm_rf(["#{@published_files}/frames", "#{@published_files}/shapes_modified.svg"])
 
 exit(0)

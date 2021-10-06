@@ -10,7 +10,6 @@ def download(file)
   # Format: "https://hostname/presentation/meetingID/#{file}"
 
   path = "https://hostname/presentation/meetingID/#{file}"
-  path = "https://vmott40.in.tum.de/presentation/fccbbfd5ae98f6eb1e6bf57fc8970672da7244b6-1630411518050/#{file}"
 
   puts "Downloading #{path}"
 
@@ -18,11 +17,6 @@ def download(file)
     get << URI.parse(path.to_s).open(&:read)
   end
 end
-
-# Downloads the recording's assets
-# Whiteboard: 'shapes.svg', 'cursor.xml', 'panzooms.xml', 'presentation_text.json', 'captions.json', 'metadata.xml'
-# Video: 'video/webcams.mp4', 'deskshare/deskshare.mp4'
-# Chat: 'slides_new.xml'
 
 ['shapes.svg'].each do |get|
   download(get)
@@ -40,7 +34,7 @@ json = JSON.parse(File.read('captions.json'))
   download "caption_#{json[i]['locale']}.vtt"
 end
 
-# Downloads each slide
+# Download each slide
 slides.each do |img|
   path = File.dirname(img.attr('xlink:href'))
 

@@ -644,15 +644,18 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
 
   # Render the visible frame for each interval
   File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w", 0o600) do |file|
-    slide = slides.first
+    slide_number = 0
+    slide = slides[slide_number]
+
     view_box = ""
 
     intervals.each_cons(2).each do |interval_start, interval_end|
       # Get view_box parameter of the current slide
       _, view_box = panzooms.shift if !panzooms.empty? && interval_start >= panzooms.first.first
 
-      if !slides.empty? && interval_start >= slide.begin
-        slide = slides.shift
+      if slide_number < slides.size && interval_start >= slides[slide_number].begin
+        slide = slides[slide_number]
+        slide_number += 1
       end
 
       draw = shapes_interval_tree.search(interval_start, unique: false, sort: false)

@@ -86,7 +86,7 @@ WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
 
 def add_captions
-  json = JSON.parse(File.read('captions.json'))
+  json = JSON.parse(File.read("#{@published_files}/captions.json"))
   caption_amount = json.length
 
   return if caption_amount.zero?

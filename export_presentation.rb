@@ -18,12 +18,13 @@ include IntervalTree
 
 opts = Trollop.options do
   opt :meeting_id, "Meeting id to archive", type: String
+  opt :log_stdout, "Log to STDOUT", :type => :flag
   opt :format, "Playback format name", type: String
 end
 
 meeting_id = opts[:meeting_id]
 
-logger = Logger.new("/var/log/bigbluebutton/post_publish.log", 'weekly')
+logger = opts[:log_stdout] ? Logger.new(STDOUT) : Logger.new("/var/log/bigbluebutton/post_publish.log", 'weekly' )
 logger.level = Logger::INFO
 BigBlueButton.logger = logger
 

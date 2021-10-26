@@ -61,6 +61,8 @@ BENCHMARK = BENCHMARK_FFMPEG ? "-benchmark " : ""
 
 THREADS = 4
 
+BACKGROUND_COLOR = "white"
+
 CURSOR_RADIUS = 8
 
 # Output video size
@@ -663,7 +665,7 @@ def render_video(duration, meeting_name)
   deskshare = !HIDE_DESKSHARE && File.file?("#{@published_files}/deskshare/deskshare.#{VIDEO_EXTENSION}")
   chat = !HIDE_CHAT && File.file?("#{@published_files}/chats/chat.svg")
 
-  render = "ffmpeg -f lavfi -i color=c=white:s=#{OUTPUT_WIDTH}x#{OUTPUT_HEIGHT} " \
+  render = "ffmpeg -f lavfi -i color=c=#{BACKGROUND_COLOR}:s=#{OUTPUT_WIDTH}x#{OUTPUT_HEIGHT} " \
            "-f concat -safe 0 #{BASE_URI} -i #{@published_files}/timestamps/whiteboard_timestamps " \
            "-framerate 10 -loop 1 -i #{@published_files}/cursor/cursor.svg "
 

@@ -770,15 +770,37 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
   # Builds SVG frame
   builder = Builder::XmlMarkup.new
 
-  # FFmpeg requires the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
-  builder.svg(width: SLIDES_WIDTH, height: SLIDES_HEIGHT, viewBox: view_box,
-              "xmlns:xlink" => "http://www.w3.org/1999/xlink", 'xmlns' => 'http://www.w3.org/2000/svg') do
-    # Display background image
-    builder.image('xlink:href': slide_href, width: width, height: height, preserveAspectRatio: "xMidYMid slice")
+  view_box_x, view_box_y, view_box_width, view_box_height = view_box.split.map{ |n| n.to_f }
+  view_box_aspect_ratio = view_box_width / view_box_height
 
-    # Adds annotations
-    draw.each do |shape|
-      builder << shape.value
+  width = width.to_f
+  height = height.to_f
+  slide_aspect_ratio = width / height
+
+  outer_viewbox_x = 0
+  outer_viewbox_y = 0
+  outer_viewbox_width = SLIDES_WIDTH
+  outer_viewbox_height = SLIDES_HEIGHT
+
+  if view_box_aspect_ratio > slide_aspect_ratio
+    outer_viewbox_height = SLIDES_WIDTH / view_box_aspect_ratio
+  else
+    outer_viewbox_width = SLIDES_HEIGHT * view_box_aspect_ratio
+  end
+  outer_viewbox = "#{outer_viewbox_x} #{outer_viewbox_y} #{outer_viewbox_width} #{outer_viewbox_height}"
+
+  builder.svg(width: SLIDES_WIDTH, height: SLIDES_HEIGHT, viewBox: outer_viewbox,
+              "xmlns:xlink" => "http://www.w3.org/1999/xlink", 'xmlns' => 'http://www.w3.org/2000/svg') do
+    # FFmpeg requires the xmlns:xmlink namespace. Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging
+    builder.svg(viewBox: view_box,
+                "xmlns:xlink" => "http://www.w3.org/1999/xlink", 'xmlns' => 'http://www.w3.org/2000/svg') do
+      # Display background image
+      builder.image('xlink:href': slide_href, width: width, height: height)
+
+      # Adds annotations
+      draw.each do |shape|
+        builder << shape.value
+      end
     end
   end
 

@@ -209,6 +209,52 @@ def base64_encode(path)
   "data:image/#{File.extname(path).delete('.')};base64,#{Base64.strict_encode64(data)}"
 end
 
+def measure_string(s, font_size)
+  # https://stackoverflow.com/a/4081370
+  # DejaVuSans, the default truefont of Debian, can be used here
+  # /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+  # use ImageMagick to measure the string in pixels
+  command = "convert xc: -font /usr/share/fonts/truetype/msttcorefonts/Arial.ttf -pointsize #{font_size} -debug annotate -annotate 0 '#{s}' null: 2>&1"
+  _, output = run_command(command)
+  output.match(/; width: (\d+);/)[1].to_f
+end
+
+def pack_up_string(s, separator, font_size, text_box_width)
+  # split the line on whitespaces, and measure the line to fit into
+  # the text_box_width
+  line_breaks = []
+  queued_words = []
+  s.split(separator).each do |word|
+    # first consider queued word and the current word in the line
+    test_string = ( queued_words + [ word ] ).join(separator)
+
+    width = measure_string(test_string, font_size)
+
+    if width > text_box_width
+      # line exceeded, so consider the queued words as a line break and
+      # queue the current word
+      line_breaks += [ queued_words.join(separator) ]
+      if measure_string(word, font_size) > text_box_width
+        # if the word alone exceeds the box width, then we pack the word
+        # maximizing the amount of characters on each line
+        res = pack_up_string(word, "", font_size, text_box_width)
+        # queue last line break, other words might fit
+        queued_words = [ res.pop ]
+        line_breaks += res
+      else
+        queued_words = [ word ]
+      end
+    else
+      # current word fits the text box, so keep enqueueing new words
+      queued_words += [ word ]
+    end
+  end
+  # make sure we release the final queued words as the final line break
+  line_breaks += [ queued_words.join(separator) ] unless queued_words.empty?
+
+  line_breaks
+end
+
 def convert_whiteboard_shapes(whiteboard)
   # Find shape elements
   whiteboard.xpath("svg/g/g").each do |annotation|
@@ -256,19 +302,28 @@ def convert_whiteboard_shapes(whiteboard)
 
     builder = Builder::XmlMarkup.new
     builder.text(x: x, y: y, fill: text_color, "xml:space" => "preserve") do
+      previous_line_was_text = true
+
       text.each do |line|
-        line = Loofah.fragment(line.to_s).scrub!(:strip).text.unicode_normalize
+        line = line.to_s
 
         if line == "<br/>"
-          builder.tspan(x: x, dy: "0.9em") { builder << "<br/>" }
+          if previous_line_was_text
+            previous_line_was_text = false
+          else
+            builder.tspan(x: x, dy: "1.0em") { builder << "<br/>" }
+          end
         else
-          # Assumes a width to height aspect ratio of 0.52 for Arial
-          line_breaks = line.chars.each_slice((text_box_width / (font_size * 0.52)).to_i).map(&:join)
+          line = Loofah.fragment(line).scrub!(:strip).text.unicode_normalize
+
+          line_breaks = pack_up_string(line, " ", font_size, text_box_width)
 
           line_breaks.each do |row|
             safe_message = Loofah.fragment(row).scrub!(:escape)
-            builder.tspan(x: x, dy: "0.9em") { builder << safe_message }
+            builder.tspan(x: x, dy: "1.0em") { builder << safe_message }
           end
+
+          previous_line_was_text = true
         end
       end
     end

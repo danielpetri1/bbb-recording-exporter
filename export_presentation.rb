@@ -36,6 +36,8 @@ BigBlueButton.logger.info("Started exporting presentation for [#{meeting_id}]")
 FileUtils.mkdir_p(["#{@published_files}/chats", "#{@published_files}/cursor", "#{@published_files}/frames",
                    "#{@published_files}/timestamps", "/var/bigbluebutton/published/video/#{meeting_id}"])
 
+TEMPORARY_FILES_PERMISSION = 0o600
+
 # Setting the SVGZ option to true will write less data on the disk.
 SVGZ_COMPRESSION = true
 
@@ -49,7 +51,7 @@ CAPTION_SUPPORT = false
 # Video output quality: 0 is lossless, 51 is the worst. Default 23, 18 - 28 recommended
 CONSTANT_RATE_FACTOR = 23
 
-FILE_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
+SVG_EXTENSION = SVGZ_COMPRESSION ? "svgz" : "svg"
 VIDEO_EXTENSION = File.file?("#{@published_files}/video/webcams.mp4") ? "mp4" : "webm"
 
 # Set this to true if the whiteboard supports whiteboard animations
@@ -271,7 +273,7 @@ def convert_whiteboard_shapes(whiteboard)
   end
 
   # Save new shapes.svg copy
-  File.open("#{@published_files}/shapes_modified.svg", "w", 0o600) do |file|
+  File.open("#{@published_files}/shapes_modified.svg", "w", TEMPORARY_FILES_PERMISSION) do |file|
     file.write(whiteboard)
   end
 end
@@ -505,11 +507,11 @@ def render_chat(chat_reader)
   builder_root.set_attribute('height', cropped_chat_canvas_height)
 
   # Saves chat as SVG / SVGZ file
-  File.open("#{@published_files}/chats/chat.svg", "w", 0o600) do |file|
+  File.open("#{@published_files}/chats/chat.svg", "w", TEMPORARY_FILES_PERMISSION) do |file|
     file.write(builder)
   end
 
-  File.open("#{@published_files}/timestamps/chat_timestamps", "w", 0o600) do |file|
+  File.open("#{@published_files}/timestamps/chat_timestamps", "w", TEMPORARY_FILES_PERMISSION) do |file|
     overlay_position.each do |timestamp, x, y|
       file.puts "#{timestamp} crop@c x #{x}, crop@c y #{y};"
     end
@@ -525,7 +527,7 @@ def render_cursor(panzooms, cursor_reader)
     builder.circle(cx: "8", cy: "8", r: "8", fill: "red")
   end
 
-  File.open("#{@published_files}/cursor/cursor.svg", "w", 0o600) do |svg|
+  File.open("#{@published_files}/cursor/cursor.svg", "w", TEMPORARY_FILES_PERMISSION) do |svg|
     svg.write(builder.target!)
   end
 
@@ -543,7 +545,7 @@ def render_cursor(panzooms, cursor_reader)
   end
 
   panzoom_index = 0
-  File.open("#{@published_files}/timestamps/cursor_timestamps", "w", 0o600) do |file|
+  File.open("#{@published_files}/timestamps/cursor_timestamps", "w", TEMPORARY_FILES_PERMISSION) do |file|
     timestamps.each.with_index do |timestamp, frame_number|
       panzoom = panzooms[panzoom_index]
 
@@ -670,7 +672,7 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
   frame_number = 0
 
   # Render the visible frame for each interval
-  File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w", 0o600) do |file|
+  File.open("#{@published_files}/timestamps/whiteboard_timestamps", "w", TEMPORARY_FILES_PERMISSION) do |file|
     slide_number = 0
     slide = slides[slide_number]
     view_box = ""
@@ -692,14 +694,14 @@ def render_whiteboard(panzooms, slides, shapes, timestamps)
       svg_export(draw, view_box, slide.href, slide.width, slide.height, frame_number)
 
       # Write the frame's duration down
-      file.puts "file ../frames/frame#{frame_number}.#{FILE_EXTENSION}"
+      file.puts "file ../frames/frame#{frame_number}.#{SVG_EXTENSION}"
       file.puts "duration #{(interval_end - interval_start).round(1)}"
 
       frame_number += 1
     end
 
     # The last image needs to be specified twice, without specifying the duration (FFmpeg quirk)
-    file.puts "file ../frames/frame#{frame_number - 1}.#{FILE_EXTENSION}" if frame_number.positive?
+    file.puts "file ../frames/frame#{frame_number - 1}.#{SVG_EXTENSION}" if frame_number.positive?
   end
 end
 
@@ -719,7 +721,7 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
     end
   end
 
-  File.open("#{@published_files}/frames/frame#{frame_number}.#{FILE_EXTENSION}", "w", 0o600) do |svg|
+  File.open("#{@published_files}/frames/frame#{frame_number}.#{SVG_EXTENSION}", "w", TEMPORARY_FILES_PERMISSION) do |svg|
     if SVGZ_COMPRESSION
       svgz = Zlib::GzipWriter.new(svg, Zlib::BEST_SPEED)
       svgz.write(builder.target!)

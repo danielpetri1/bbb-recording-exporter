@@ -61,6 +61,8 @@ BENCHMARK = BENCHMARK_FFMPEG ? "-benchmark " : ""
 
 THREADS = 4
 
+CURSOR_RADIUS = 8
+
 # Output video size
 OUTPUT_WIDTH = 1920
 OUTPUT_HEIGHT = 1080
@@ -522,8 +524,8 @@ def render_cursor(panzooms, cursor_reader)
   builder = Builder::XmlMarkup.new
 
   # Add 'xmlns' => 'http://www.w3.org/2000/svg' for visual debugging, remove for faster exports
-  builder.svg(width: "16", height: "16") do
-    builder.circle(cx: "8", cy: "8", r: "8", fill: "red")
+  builder.svg(width: CURSOR_RADIUS * 2, height: CURSOR_RADIUS * 2) do
+    builder.circle(cx: CURSOR_RADIUS, cy: CURSOR_RADIUS, r: CURSOR_RADIUS, fill: "red")
   end
 
   File.open("#{@published_files}/cursor/cursor.svg", "w", TEMPORARY_FILES_PERMISSION) do |svg|
@@ -580,8 +582,8 @@ def render_cursor(panzooms, cursor_reader)
       y_offset = (SLIDES_HEIGHT - (scale_factor * height)) / 2
 
       # Center cursor
-      cursor_x -= 8
-      cursor_y -= 8
+      cursor_x -= CURSOR_RADIUS
+      cursor_y -= CURSOR_RADIUS
 
       cursor_x += x_offset
       cursor_y += y_offset

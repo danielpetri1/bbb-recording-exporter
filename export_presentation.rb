@@ -104,6 +104,12 @@ DESKSHARE_Y_OFFSET = ((SLIDES_HEIGHT -
 WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
 
+def run_command(command)
+  BigBlueButton.logger.info("Running: #{command}")
+  output = `#{command}`
+  [ $?.success?, output ]
+end
+
 def add_captions
   json = JSON.parse(File.read("#{@published_files}/captions.json"))
   caption_amount = json.length
@@ -125,9 +131,8 @@ def add_captions
            "-map 0:v -map 0:a #{maps} -c:v copy -c:a copy -c:s mov_text #{language_names} " \
            "-y #{@published_files}/meeting_captioned.mp4"
 
-  ffmpeg = system(render)
-
-  if ffmpeg
+  success, _ = run_command(render)
+  if success
     FileUtils.mv("#{@published_files}/meeting_captioned.mp4", "#{@published_files}/meeting-tmp.mp4")
   else
       warn("An error occurred adding the captions to the video.")
@@ -137,9 +142,10 @@ end
 
 def add_chapters(duration, slides)
   # Extract metadata
-  ffmpeg = system("ffmpeg -i #{@published_files}/meeting-tmp.mp4 -y -f ffmetadata #{@published_files}/meeting_metadata")
+  command = "ffmpeg -i #{@published_files}/meeting-tmp.mp4 -y -f ffmetadata #{@published_files}/meeting_metadata"
 
-  unless ffmpeg
+  success, _ = run_command(command)
+  unless success
     warn("An error occurred extracting the video's metadata.")
     exit(false)
   end
@@ -175,8 +181,8 @@ def add_chapters(duration, slides)
            "-i #{@published_files}/meeting_metadata -map_metadata 1 " \
            "-map_chapters 1 -codec copy -y -t #{duration} #{@published_files}/meeting_chapters.mp4"
 
-  ffmpeg = system(render)
-  if ffmpeg
+  success, _ = run_command(render)
+  if success
     FileUtils.mv("#{@published_files}/meeting_chapters.mp4", "#{@published_files}/meeting-tmp.mp4")
   else
     warn("Failed to add the chapters to the video.")
@@ -655,9 +661,8 @@ def render_video(duration, meeting_name)
   render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} -threads #{THREADS} " \
             "-metadata title=\"#{meeting_name}\" #{BENCHMARK} #{@published_files}/meeting-tmp.mp4"
 
-  ffmpeg = system(render)
-
-  unless ffmpeg
+  success, _ = run_command(render)
+  unless success
     warn("An error occurred rendering the video.")
     exit(false)
   end

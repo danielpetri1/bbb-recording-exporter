@@ -106,8 +106,8 @@ DESKSHARE_Y_OFFSET = ((SLIDES_HEIGHT -
 WhiteboardElement = Struct.new(:begin, :end, :value, :id)
 WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
 
-def run_command(command)
-  BigBlueButton.logger.info("Running: #{command}")
+def run_command(command, silent = false)
+  BigBlueButton.logger.info("Running: #{command}") unless silent
   output = `#{command}`
   [ $?.success?, output ]
 end
@@ -217,7 +217,7 @@ def measure_string(s, font_size)
   # /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
   # use ImageMagick to measure the string in pixels
   command = "convert xc: -font /usr/share/fonts/truetype/msttcorefonts/Arial.ttf -pointsize #{font_size} -debug annotate -annotate 0 '#{s}' null: 2>&1"
-  _, output = run_command(command)
+  _, output = run_command(command, true)
   output.match(/; width: (\d+);/)[1].to_f
 end
 

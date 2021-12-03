@@ -1,29 +1,34 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: false
 
-require "trollop"
-require File.expand_path('../../../lib/recordandplayback', __FILE__)
-
-require "nokogiri"
+require "English"
 require "base64"
 require "builder"
 require "csv"
-require 'digest/bubblebabble'
 require "fileutils"
 require "json"
 require "loofah"
+require "nokogiri"
+require "trollop"
+require 'digest/bubblebabble'
+
+require File.expand_path('../../../lib/recordandplayback', __FILE__)
 require File.expand_path('../../../lib/recordandplayback/interval_tree', __FILE__)
 
 include IntervalTree
 
 opts = Trollop.options do
   opt :meeting_id, "Meeting id to archive", type: String
-  opt :log_stdout, "Log to STDOUT", :type => :flag
+  opt :format, "Playback format name", type: String
+  opt :log_stdout, "Log to STDOUT", type: :flag
 end
 
 meeting_id = opts[:meeting_id]
+playback = opts[:format]
 
-logger = opts[:log_stdout] ? Logger.new(STDOUT) : Logger.new("/var/log/bigbluebutton/post_publish.log", 'weekly' )
+exit(0) if playback != "presentation"
+
+logger = opts[:log_stdout] ? Logger.new($stdout) : Logger.new("/var/log/bigbluebutton/post_publish.log", 'weekly')
 logger.level = Logger::INFO
 BigBlueButton.logger = logger
 
@@ -109,7 +114,7 @@ WhiteboardSlide = Struct.new(:href, :begin, :end, :width, :height)
 def run_command(command, silent = false)
   BigBlueButton.logger.info("Running: #{command}") unless silent
   output = `#{command}`
-  [ $?.success?, output ]
+  [$CHILD_STATUS.success?, output]
 end
 
 def add_captions
@@ -133,7 +138,7 @@ def add_captions
            "-map 0:v -map 0:a #{maps} -c:v copy -c:a copy -c:s mov_text #{language_names} " \
            "-y #{@published_files}/meeting_captioned.mp4"
 
-  success, _ = run_command(render)
+  success, = run_command(render)
   if success
     FileUtils.mv("#{@published_files}/meeting_captioned.mp4", "#{@published_files}/meeting-tmp.mp4")
   else
@@ -146,7 +151,7 @@ def add_chapters(duration, slides)
   # Extract metadata
   command = "ffmpeg -i #{@published_files}/meeting-tmp.mp4 -y -f ffmetadata #{@published_files}/meeting_metadata"
 
-  success, _ = run_command(command)
+  success, = run_command(command)
   unless success
     warn("An error occurred extracting the video's metadata.")
     exit(false)
@@ -183,7 +188,7 @@ def add_chapters(duration, slides)
            "-i #{@published_files}/meeting_metadata -map_metadata 1 " \
            "-map_chapters 1 -codec copy -y -t #{duration} #{@published_files}/meeting_chapters.mp4"
 
-  success, _ = run_command(render)
+  success, = run_command(render)
   if success
     FileUtils.mv("#{@published_files}/meeting_chapters.mp4", "#{@published_files}/meeting-tmp.mp4")
   else
@@ -193,7 +198,7 @@ def add_chapters(duration, slides)
 end
 
 def add_greenlight_buttons(metadata)
-  bbb_props = YAML::load(File.open(File.join(__dir__, '../bigbluebutton.yml')))
+  bbb_props = YAML.safe_load(File.open(File.join(__dir__, '../bigbluebutton.yml')))
   playback_protocol = bbb_props['playback_protocol']
   playback_host = bbb_props['playback_host']
 
@@ -231,31 +236,31 @@ def pack_up_string(s, separator, font_size, text_box_width)
   queued_words = []
   s.split(separator).each do |word|
     # first consider queued word and the current word in the line
-    test_string = ( queued_words + [ word ] ).join(separator)
+    test_string = (queued_words + [word]).join(separator)
 
     width = measure_string(test_string, font_size)
 
     if width > text_box_width
       # line exceeded, so consider the queued words as a line break and
       # queue the current word
-      line_breaks += [ queued_words.join(separator) ]
+      line_breaks += [queued_words.join(separator)]
       if measure_string(word, font_size) > text_box_width
         # if the word alone exceeds the box width, then we pack the word
         # maximizing the amount of characters on each line
         res = pack_up_string(word, "", font_size, text_box_width)
         # queue last line break, other words might fit
-        queued_words = [ res.pop ]
+        queued_words = [res.pop]
         line_breaks += res
       else
-        queued_words = [ word ]
+        queued_words = [word]
       end
     else
       # current word fits the text box, so keep enqueueing new words
-      queued_words += [ word ]
+      queued_words += [word]
     end
   end
   # make sure we release the final queued words as the final line break
-  line_breaks += [ queued_words.join(separator) ] unless queued_words.empty?
+  line_breaks += [queued_words.join(separator)] unless queued_words.empty?
 
   line_breaks
 end
@@ -721,7 +726,7 @@ def render_video(duration, meeting_name)
   render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} -threads #{THREADS} " \
             "-metadata title=\"#{meeting_name}\" #{BENCHMARK} #{@published_files}/meeting-tmp.mp4"
 
-  success, _ = run_command(render)
+  success, = run_command(render)
   unless success
     warn("An error occurred rendering the video.")
     exit(false)
@@ -775,7 +780,7 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
   # Builds SVG frame
   builder = Builder::XmlMarkup.new
 
-  view_box_x, view_box_y, view_box_width, view_box_height = view_box.split.map{ |n| n.to_f }
+  _view_box_x, _view_box_y, view_box_width, view_box_height = view_box.split.map(&:to_f)
   view_box_aspect_ratio = view_box_width / view_box_height
 
   width = width.to_f
@@ -809,7 +814,8 @@ def svg_export(draw, view_box, slide_href, width, height, frame_number)
     end
   end
 
-  File.open("#{@published_files}/frames/frame#{frame_number}.#{SVG_EXTENSION}", "w", TEMPORARY_FILES_PERMISSION) do |svg|
+  File.open("#{@published_files}/frames/frame#{frame_number}.#{SVG_EXTENSION}", "w",
+              TEMPORARY_FILES_PERMISSION) do |svg|
     if SVGZ_COMPRESSION
       svgz = Zlib::GzipWriter.new(svg, Zlib::BEST_SPEED)
       svgz.write(builder.target!)

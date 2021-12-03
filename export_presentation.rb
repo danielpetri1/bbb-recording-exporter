@@ -193,11 +193,14 @@ def add_chapters(duration, slides)
 end
 
 def add_greenlight_buttons(metadata)
+  bbb_props = YAML::load(File.open(File.join(__dir__, '../bigbluebutton.yml')))
+  playback_protocol = bbb_props['playback_protocol']
+  playback_host = bbb_props['playback_host']
+
   meeting_id = metadata.xpath('recording/id').inner_text
-  hostname = metadata.xpath('recording/meta/bbb-origin-server-name').inner_text
 
   metadata.xpath('recording/playback/format').children.first.content = "video"
-  metadata.xpath('recording/playback/link').children.first.content = "https://#{hostname}/presentation/#{meeting_id}/meeting.mp4"
+  metadata.xpath('recording/playback/link').children.first.content = "#{playback_protocol}://#{playback_host}/presentation/#{meeting_id}/meeting.mp4"
 
   File.open("/var/bigbluebutton/published/video/#{meeting_id}/metadata.xml", "w") do |file|
     file.write(metadata)

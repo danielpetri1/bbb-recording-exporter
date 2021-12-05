@@ -5,6 +5,6 @@
 !LICENSE
 !demo/
 !lib/interval_tree.rb
-!export_presentation.rb
+!presentation.rb
 !.rubocop.yml
 !librsvgdec.c

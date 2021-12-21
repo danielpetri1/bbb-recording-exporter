@@ -225,7 +225,7 @@ def measure_string(s, font_size)
   # DejaVuSans, the default truefont of Debian, can be used here
   # /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
   # use ImageMagick to measure the string in pixels
-  command = "convert xc: -font /usr/share/fonts/truetype/msttcorefonts/Arial.ttf -pointsize #{font_size} -debug annotate -annotate 0 '#{s}' null: 2>&1"
+  command = "convert xc: -font /usr/share/fonts/truetype/msttcorefonts/Arial.ttf -pointsize #{font_size} -debug annotate -annotate 0 #{Shellwords.escape(s)} null: 2>&1"
   _, output = run_command(command, true)
   output.match(/; width: (\d+);/)[1].to_f
 end
@@ -727,7 +727,7 @@ def render_video(duration, meeting_name)
   end
 
   render << "-c:a aac -crf #{CONSTANT_RATE_FACTOR} -shortest -y -t #{duration} -threads #{THREADS} " \
-            "-metadata title=\"#{meeting_name}\" #{BENCHMARK} #{@published_files}/meeting-tmp.mp4"
+            "-metadata title=#{Shellwords.escape("#{meeting_name}")} #{BENCHMARK} #{@published_files}/meeting-tmp.mp4"
 
   success, = run_command(render)
   unless success

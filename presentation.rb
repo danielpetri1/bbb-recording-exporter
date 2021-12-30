@@ -10,7 +10,7 @@ require 'fileutils'
 require 'json'
 require 'loofah'
 require 'nokogiri'
-require 'trollop'
+require 'optimist'
 require 'yaml'
 
 require File.expand_path('../../../lib/recordandplayback', __FILE__)
@@ -18,7 +18,7 @@ require File.expand_path('../../../lib/recordandplayback/interval_tree', __FILE_
 
 include IntervalTree
 
-opts = Trollop.options do
+opts = Optimist.options do
   opt :meeting_id, 'Meeting id to archive', type: String
   opt :format, 'Playback format name', type: String
   opt :log_stdout, 'Log to STDOUT', type: :flag

@@ -99,7 +99,7 @@ Existing recordings can be re-rendered by running the exporting script on an ind
 
   
 
-    ./presentation.rb -m <meeting_id>
+    ./presentation.rb -m <meeting_id> -f presentation
 
   
 

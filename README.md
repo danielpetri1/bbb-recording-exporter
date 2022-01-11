@@ -5,13 +5,35 @@
 
 Server-side version of the script that exports recorded presentation slides as a single PDF file.
 
+
+## What's supported?
+
+  
+
+  
+
+✅  Annotations <br  />
+
+
+✅  Integration with Greenlight <br  />
+
+
+✅  Polls <br  />
+  
+
+✅  Slides<br  />
+
+
+✅  Text <br  />
+  
+
 ## Server-Side Usage
 
 Place the file `export_slides.rb` in the `/usr/local/bigbluebutton/core/scripts/post_publish` directory with executable rights.
   
 Do the same for the file `lib/interval_tree.rb`, moving it to `/usr/local/bigbluebutton/core/lib/recordandplayback`.
 
-After a session is over and the presentation is processed, the script will begin to export the recording as a single PDF file. It can be accessed and downloaded at https://`your.bbb.hostname`/presentation/`meeting-id`/annotated_slides.pdf once rendering completes, or directly in the Greenlight interface.
+After a session is over and the presentation is processed, the script will begin to export the recording as a single PDF file. It can be accessed and downloaded at `https://<your.bbb.hostname>/presentation/<meeting-id>/annotated_slides.pdf` once rendering completes, or directly in the Greenlight interface.
 
 The meeting's ID is the alphanumeric string following the 2.3 in the recording's URL.
 
@@ -40,7 +62,7 @@ Less data can be written on the disk by turning `SVGZ_COMPRESSION` on.
 
   
 
-Exports don't start after the meeting ends: `/var/log/bigbluebutton/post_publish.log` and `/var/bigbluebutton/published/video/` must be chowned to `bigbluebutton:bigbluebutton`
+Exports don't start after the meeting ends: `/var/log/bigbluebutton/post_publish.log` and `/var/bigbluebutton/published/document/` must be chowned to `bigbluebutton:bigbluebutton`
 
   
 

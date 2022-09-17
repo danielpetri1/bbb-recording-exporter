@@ -79,6 +79,12 @@ Server-side version of the script that enables users to download BigBlueButton 2
 
 ## Server-Side Usage
 
+Install the prerequisites (the following packages and RubyGems need to be installed on a BBB v2.5.x server running Ubuntu 20.04):
+
+```shell
+sudo apt-get install libsystemd-dev ruby-dev
+sudo gem install builder optimist loofah nokogiri redis journald-logger open4 absolute_time
+```
   
 
 Place the file `presentation.rb` in the `/usr/local/bigbluebutton/core/scripts/post_publish` directory with executable rights.
